@@ -1,3 +1,4 @@
+#include "lexer.h"
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -34,7 +35,7 @@ static std::string IdentifierStr;
 static double NumVal;
 
 /// gettok - Return the next token from standard input.
-static int gettok() {
+int gettok() {
         static int LastChar = ' ';
 
         // Skip whitespaces.
@@ -86,18 +87,30 @@ static int gettok() {
         LastChar = getchar();
 
         // Multi-char operators
-        if (ThisChar == '<' && LastChar == '=')
+        if (ThisChar == '<' && LastChar == '=') {
+                LastChar = getchar();
                 return tok_le;
-        if (ThisChar == '>' && LastChar == '=')
+        }
+        if (ThisChar == '>' && LastChar == '=') {
+                LastChar = getchar();
                 return tok_ge;
-        if (ThisChar == '=' && LastChar == '=')
+        }
+        if (ThisChar == '=' && LastChar == '=') {
+                LastChar = getchar();
                 return tok_eq;
-        if (ThisChar == '!' && LastChar == '=')
+        }
+        if (ThisChar == '!' && LastChar == '=') {
+                LastChar = getchar();
                 return tok_ne;
-        if (ThisChar == '|' && LastChar == '|')
+        }
+        if (ThisChar == '|' && LastChar == '|') {
+                LastChar = getchar();
                 return tok_lor;
-        if (ThisChar == '&' && LastChar == '&')
+        }
+        if (ThisChar == '&' && LastChar == '&') {
+                LastChar = getchar();
                 return tok_land;
+        }
 
         // Comments.
         if (ThisChar == '/' && LastChar == '*') {
