@@ -77,9 +77,6 @@ int gettok() {
                 return tok_number;
         }
 
-        if (LastChar == '/' && (LastChar = getchar()) == '*') {
-        }
-
         if (LastChar == EOF)
                 return tok_eof;
 
@@ -119,8 +116,10 @@ int gettok() {
                         LastChar = getchar();
                 } while (LastChar != EOF && !(ThisChar == '*' && LastChar == '/'));
 
-                if (LastChar != EOF)
+                if (LastChar != EOF) {
+                        LastChar = getchar();
                         return gettok();
+                }
         }
 
         return ThisChar;
