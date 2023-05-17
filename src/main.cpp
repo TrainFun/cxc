@@ -2,7 +2,9 @@
 #include <cstdio>
 
 int main() {
-        while (true) {
-                printf("%d\n", gettok());
-        }
+        int tok;
+        do {
+                tok = gettok();
+                printf("%d\n", tok);
+        } while (tok != -1);
 }
