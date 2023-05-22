@@ -4,35 +4,8 @@
 #include <cstdlib>
 #include <string>
 
-enum Token {
-  tok_eof = -1,
-
-  // primary
-  tok_identifier = -2,
-  tok_number = -3,
-
-  // control
-  tok_if = -4,
-  tok_else = -5,
-  tok_while = -6,
-  tok_write = -7,
-  tok_read = -8,
-
-  // operators
-  tok_le = -9,    // <=
-  tok_ge = -10,   // >=
-  tok_eq = -11,   // ==
-  tok_ne = -12,   // !=
-  tok_lor = -13,  // ||
-  tok_land = -14, // &&
-
-  // var definition
-  tok_int = -15,
-  tok_bool = -16,
-};
-
-static std::string IdentifierStr;
-static double NumVal;
+std::string IdentifierStr;
+unsigned NumVal;
 
 /// gettok - Return the next token from standard input.
 int gettok() {
