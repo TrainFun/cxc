@@ -6,9 +6,9 @@ EXE := $(BIN_DIR)/main
 SRC := $(wildcard $(SRC_DIR)/*.cpp)
 OBJ := $(SRC:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 
-CPPFLAGS := -Iinclude -MMD -MP
+CPPFLAGS := -Iinclude -MMD -MP -g
 CXXFLAGS := -Wall -Wextra
-LDFLAGS  :=
+LDFLAGS  := -g
 LDLIBS   := -lstdc++ -lm
 
 .PHONY: all clean
