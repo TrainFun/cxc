@@ -1,7 +1,7 @@
+#include "parser.h"
 #include "AST.h"
 #include "ir.h"
 #include "lexer.h"
-#include "parser.h"
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/raw_ostream.h>
@@ -30,18 +30,28 @@ std::unique_ptr<ExprAST> LogError(const char *Str) {
   return nullptr;
 }
 
+std::unique_ptr<DeclAST> LogErrorD(const char *Str) {
+  LogError(Str);
+  return nullptr;
+}
+
+std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
+  LogError(Str);
+  return nullptr;
+}
+
 std::unique_ptr<ExprAST> ParseExpression();
 
 std::unique_ptr<ExprAST> ParseNumberExpr() {
   auto Result = std::make_unique<NumberExprAST>(NumVal);
   getNextToken();
-  return std::move(Result);
+  return Result;
 }
 
 std::unique_ptr<ExprAST> ParseBooleanExpr() {
   auto Result = std::make_unique<BooleanExprAST>(CurTok == tok_true);
   getNextToken();
-  return std::move(Result);
+  return Result;
 }
 
 std::unique_ptr<ExprAST> ParseParenExpr() {
@@ -65,7 +75,27 @@ std::unique_ptr<ExprAST> ParseIdentifierExpr() {
     return std::make_unique<VariableExprAST>(IdName);
 
   // Call.
-  return nullptr;
+  getNextToken();
+  std::vector<std::unique_ptr<ExprAST>> Args;
+  if (CurTok != ')') {
+    while (true) {
+      if (auto Arg = ParseExpression())
+        Args.push_back(std::move(Arg));
+      else
+        return nullptr;
+
+      if (CurTok == ')')
+        break;
+
+      if (CurTok != ',')
+        return LogError("Expected ')' or ',' in argument list");
+      getNextToken();
+    }
+  }
+
+  getNextToken();
+
+  return std::make_unique<CallExprAST>(IdName, std::move(Args));
 }
 
 std::unique_ptr<ExprAST> ParsePrimary() {
@@ -118,6 +148,99 @@ std::unique_ptr<ExprAST> ParseExpression() {
   return ParseBinOpRHS(0, std::move(LHS));
 }
 
+enum CXType ParseType() {
+  enum CXType Type;
+  switch (CurTok) {
+  default:
+    LogError("Expected type");
+    return typ_err;
+  case tok_int:
+    Type = typ_int;
+    break;
+  case tok_bool:
+    Type = typ_bool;
+    break;
+  }
+  getNextToken();
+  return Type;
+}
+
+std::unique_ptr<DeclAST> ParseDeclaration() {
+  enum CXType Type = ParseType();
+  if (!Type)
+    return nullptr;
+
+  if (CurTok != tok_identifier)
+    return LogErrorD("Expected variable name in declaration");
+  std::string VarName = IdentifierStr;
+  getNextToken();
+
+  return std::make_unique<DeclAST>(Type, VarName);
+}
+
+std::unique_ptr<PrototypeAST> ParsePrototype() {
+  enum CXType RetTyp = ParseType();
+  if (!RetTyp)
+    return nullptr;
+
+  if (CurTok != tok_identifier)
+    return LogErrorP("Expected function name in prototype");
+  std::string FnName = IdentifierStr;
+  getNextToken();
+
+  if (CurTok != '(')
+    return LogErrorP("Expected '(' in prototype");
+  getNextToken();
+  std::vector<std::pair<enum CXType, std::string>> Params;
+
+  if (CurTok != ')') {
+    while (true) {
+      enum CXType ParamType = ParseType();
+      if (!ParamType)
+        return nullptr;
+
+      if (CurTok != tok_identifier)
+        return LogErrorP("Expected variable name in prototype");
+      std::string ParamName = IdentifierStr;
+      getNextToken();
+
+      Params.push_back(std::make_pair(ParamType, ParamName));
+
+      if (CurTok == ')')
+        break;
+
+      if (CurTok != ',')
+        return LogErrorP("Expected ')' or ',' in prototype");
+      getNextToken();
+    }
+  }
+
+  getNextToken();
+
+  return std::make_unique<PrototypeAST>(RetTyp, FnName, std::move(Params));
+}
+
+// 'def' prototype expression
+static std::unique_ptr<FunctionAST> ParseDefinition() {
+  getNextToken();
+  auto Proto = ParsePrototype();
+  if (!Proto)
+    return nullptr;
+
+  if (auto E = ParseExpression())
+    return std::make_unique<FunctionAST>(std::move(Proto), std::move(E));
+  return nullptr;
+}
+
+std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
+  if (auto E = ParseExpression()) {
+    auto Proto = std::make_unique<PrototypeAST>(
+        typ_int, "", std::vector<std::pair<enum CXType, std::string>>());
+    return std::make_unique<FunctionAST>(std::move(Proto), std::move(E));
+  }
+  return nullptr;
+}
+
 void InitializeModule() {
   TheContext = std::make_unique<LLVMContext>();
   TheModule = std::make_unique<Module>("my cool jit", *TheContext);
@@ -125,12 +248,26 @@ void InitializeModule() {
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
 }
 
-void HandleTopLevelExpression() {
-  if (auto ExprAST = ParseExpression()) {
-    if (auto *ExprIR = ExprAST->codegen()) {
-      fprintf(stderr, "Read top-level expression:");
-      ExprIR->print(errs());
+void HandleDefinition() {
+  if (auto FnAST = ParseDefinition()) {
+    if (auto *FnIR = FnAST->codegen()) {
+      fprintf(stderr, "Read function definition:");
+      FnIR->print(errs());
       fprintf(stderr, "\n");
+    }
+  } else {
+    getNextToken();
+  }
+}
+
+void HandleTopLevelExpression() {
+  if (auto FnAST = ParseTopLevelExpr()) {
+    if (auto *FnIR = FnAST->codegen()) {
+      fprintf(stderr, "Read top-level expression:");
+      FnIR->print(errs());
+      fprintf(stderr, "\n");
+
+      FnIR->eraseFromParent();
     }
   } else {
     getNextToken();
@@ -145,6 +282,9 @@ void MainLoop() {
       return;
     case ';':
       getNextToken();
+      break;
+    case tok_def:
+      HandleDefinition();
       break;
     default:
       HandleTopLevelExpression();

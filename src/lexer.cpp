@@ -35,6 +35,8 @@ int gettok() {
       return tok_write;
     if (IdentifierStr == "read")
       return tok_read;
+    if (IdentifierStr == "def")
+      return tok_def;
     return tok_identifier;
   }
 
