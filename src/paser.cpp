@@ -1,5 +1,10 @@
+#include "AST.h"
+#include "ir.h"
 #include "lexer.h"
 #include "parser.h"
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
+#include <llvm/Support/raw_ostream.h>
 #include <map>
 #include <memory>
 #include <pthread.h>
@@ -113,9 +118,20 @@ std::unique_ptr<ExprAST> ParseExpression() {
   return ParseBinOpRHS(0, std::move(LHS));
 }
 
+void InitializeModule() {
+  TheContext = std::make_unique<LLVMContext>();
+  TheModule = std::make_unique<Module>("my cool jit", *TheContext);
+
+  Builder = std::make_unique<IRBuilder<>>(*TheContext);
+}
+
 void HandleTopLevelExpression() {
-  if (ParseExpression()) {
-    fprintf(stderr, "Parsed a top-level expr\n");
+  if (auto ExprAST = ParseExpression()) {
+    if (auto *ExprIR = ExprAST->codegen()) {
+      fprintf(stderr, "Read top-level expression:");
+      ExprIR->print(errs());
+      fprintf(stderr, "\n");
+    }
   } else {
     getNextToken();
   }
