@@ -1,12 +1,16 @@
 #pragma once
 
+#include <llvm/IR/Function.h>
 #include <llvm/IR/Value.h>
 #include <memory>
 #include <string>
+#include <vector>
 
 using namespace llvm;
 
 // namespace {
+
+enum CXType { typ_err = 0, typ_int, typ_bool };
 
 class ExprAST {
 public:
@@ -47,6 +51,51 @@ public:
                 std::unique_ptr<ExprAST> RHS)
       : Op(Op), LHS(std::move(LHS)), RHS(std::move(RHS)) {}
   Value *codegen() override;
+};
+
+class CallExprAST : public ExprAST {
+  std::string Callee;
+  std::vector<std::unique_ptr<ExprAST>> Args;
+
+public:
+  CallExprAST(const std::string &Callee,
+              std::vector<std::unique_ptr<ExprAST>> Args)
+      : Callee(Callee), Args(std::move(Args)) {}
+  Value *codegen() override;
+};
+
+class DeclAST {
+  enum CXType Type;
+  std::string Name;
+
+public:
+  DeclAST(const enum CXType Type, const std::string &Name)
+      : Type(Type), Name(Name) {}
+};
+
+class PrototypeAST {
+  enum CXType RetTyp;
+  std::string Name;
+  std::vector<std::pair<CXType, std::string>> Args;
+
+public:
+  PrototypeAST(const enum CXType RetTyp, const std::string &Name,
+               std::vector<std::pair<enum CXType, std::string>> Args)
+      : RetTyp(RetTyp), Name(Name), Args(std::move(Args)) {}
+
+  const std::string &getName() const { return Name; }
+  Function *codegen();
+};
+
+class FunctionAST {
+  std::unique_ptr<PrototypeAST> Proto;
+  std::unique_ptr<ExprAST> Body;
+
+public:
+  FunctionAST(std::unique_ptr<PrototypeAST> Proto,
+              std::unique_ptr<ExprAST> Body)
+      : Proto(std::move(Proto)), Body(std::move(Body)) {}
+  Function *codegen();
 };
 
 // } // namespace
