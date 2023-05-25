@@ -7,9 +7,9 @@ SRC := $(wildcard $(SRC_DIR)/*.cpp)
 OBJ := $(SRC:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 
 CPPFLAGS := -Iinclude -MMD -MP -g
-CXXFLAGS := -Wall -Wextra
+CXXFLAGS := $(shell llvm-config --cxxflags) -Wall -Wextra
 LDFLAGS  := -g
-LDLIBS   := -lstdc++ -lm
+LDLIBS   := -lstdc++ -lm $(shell llvm-config --ldflags --system-libs --libs core)
 
 .PHONY: all clean
 
@@ -19,7 +19,7 @@ $(EXE): $(OBJ) | $(BIN_DIR)
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
-	$(CXX) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 $(BIN_DIR) $(OBJ_DIR):
 	mkdir -p $@
