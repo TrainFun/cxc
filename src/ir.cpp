@@ -1,6 +1,7 @@
 #include "ir.h"
 #include "AST.h"
 #include "parser.h"
+#include <llvm/ADT/APInt.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
@@ -17,10 +18,12 @@ Value *LogErrorV(const char *Str) {
 }
 
 Value *NumberExprAST::codegen() {
+  setCXType(typ_int);
   return ConstantInt::get(*TheContext, APInt(32, Val));
 }
 
 Value *BooleanExprAST::codegen() {
+  setCXType(typ_bool);
   return ConstantInt::get(*TheContext, APInt(1, Val));
 }
 
@@ -28,6 +31,12 @@ Value *VariableExprAST::codegen() {
   Value *V = NamedValues[Name];
   if (!V)
     LogErrorV("Unknown variable name");
+
+  if (V->getType() == Type::getInt32Ty(*TheContext))
+    setCXType(typ_int);
+  if (V->getType() == Type::getInt1Ty(*TheContext))
+    setCXType(typ_bool);
+
   return V;
 }
 
@@ -37,14 +46,21 @@ Value *BinaryExprAST::codegen() {
   if (!L || !R)
     return nullptr;
 
+  if (LHS->getCXType() != RHS->getCXType())
+    return LogErrorV("Binary operation on expressions of different types");
+
   switch (Op) {
   case '+':
+    setCXType(LHS->getCXType());
     return Builder->CreateAdd(L, R, "addtmp");
   case '-':
+    setCXType(LHS->getCXType());
     return Builder->CreateSub(L, R, "subtmp");
   case '*':
+    setCXType(LHS->getCXType());
     return Builder->CreateMul(L, R, "multmp");
   case '<':
+    setCXType(typ_bool);
     return Builder->CreateICmpULT(L, R, "cmptmp");
   default:
     return LogErrorV("invalid binary operator");
@@ -65,6 +81,11 @@ Value *CallExprAST::codegen() {
     if (!ArgsV.back())
       return nullptr;
   }
+
+  if (CalleeF->getReturnType() == Type::getInt32Ty(*TheContext))
+    setCXType(typ_int);
+  if (CalleeF->getReturnType() == Type::getInt1Ty(*TheContext))
+    setCXType(typ_bool);
 
   return Builder->CreateCall(CalleeF, ArgsV, "calltmp");
 }
@@ -126,6 +147,18 @@ Function *FunctionAST::codegen() {
     NamedValues[std::string(Arg.getName())] = &Arg;
 
   if (Value *RetVal = Body->codegen()) {
+    if (Body->getCXType() != Proto->getRetType()) {
+      TheFunction->eraseFromParent();
+      switch (Proto->getRetType()) {
+      case typ_int:
+        return (Function *)LogErrorV("Expected return type \"int\"");
+      case typ_bool:
+        return (Function *)LogErrorV("Expected return type \"bool\"");
+      default:
+        return (Function *)LogErrorV("Unreachable!");
+      }
+    }
+
     Builder->CreateRet(RetVal);
 
     verifyFunction(*TheFunction);
@@ -136,3 +169,67 @@ Function *FunctionAST::codegen() {
   TheFunction->eraseFromParent();
   return nullptr;
 }
+
+Value *IfExprAST::codegen() {
+  Value *CondV = Cond->codegen();
+  if (!CondV)
+    return nullptr;
+
+  if (Cond->getCXType() != typ_bool)
+    return LogErrorV("Expected boolean expression in if");
+
+  // CondV = Builder->CreateICmpNE(
+  //     CondV, ConstantInt::get(*TheContext, APInt(1, 0)), "ifcond");
+
+  Function *TheFunction = Builder->GetInsertBlock()->getParent();
+
+  BasicBlock *ThenBB = BasicBlock::Create(*TheContext, "then", TheFunction);
+  BasicBlock *ElseBB = BasicBlock::Create(*TheContext, "else");
+  BasicBlock *MergeBB = BasicBlock::Create(*TheContext, "ifcont");
+
+  Builder->CreateCondBr(CondV, ThenBB, ElseBB);
+
+  Builder->SetInsertPoint(ThenBB);
+
+  Value *ThenV = Then->codegen();
+  if (!ThenV)
+    return nullptr;
+
+  Builder->CreateBr(MergeBB);
+
+  ThenBB = Builder->GetInsertBlock();
+
+  TheFunction->insert(TheFunction->end(), ElseBB);
+  Builder->SetInsertPoint(ElseBB);
+
+  Value *ElseV = Else->codegen();
+  if (!ElseV)
+    return nullptr;
+
+  if (ThenV->getType() != ElseV->getType())
+    return LogErrorV("Expected expressions of the same type in if-else");
+  setCXType(Then->getCXType());
+
+  Builder->CreateBr(MergeBB);
+  ElseBB = Builder->GetInsertBlock();
+
+  TheFunction->insert(TheFunction->end(), MergeBB);
+  Builder->SetInsertPoint(MergeBB);
+  PHINode *PN = nullptr;
+  switch (getCXType()) {
+  case typ_int:
+    PN = Builder->CreatePHI(Type::getInt32Ty(*TheContext), 2, "iftmp");
+    break;
+  case typ_bool:
+    PN = Builder->CreatePHI(Type::getInt1Ty(*TheContext), 2, "iftmp");
+    break;
+  default:
+    LogErrorV("Unreachable!");
+  }
+
+  PN->addIncoming(ThenV, ThenBB);
+  PN->addIncoming(ElseV, ElseBB);
+  return PN;
+}
+
+Value *ForExprAST::codegen() {}

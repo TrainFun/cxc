@@ -21,10 +21,12 @@ int gettok() {
     while (isalnum((LastChar = getchar())))
       IdentifierStr += LastChar;
 
-    if (IdentifierStr == "int")
-      return tok_int;
-    if (IdentifierStr == "bool")
-      return tok_bool;
+    if (IdentifierStr == "def")
+      return tok_def;
+    if (IdentifierStr == "true")
+      return tok_true;
+    if (IdentifierStr == "false")
+      return tok_false;
     if (IdentifierStr == "if")
       return tok_if;
     if (IdentifierStr == "else")
@@ -35,8 +37,12 @@ int gettok() {
       return tok_write;
     if (IdentifierStr == "read")
       return tok_read;
-    if (IdentifierStr == "def")
-      return tok_def;
+    if (IdentifierStr == "for")
+      return tok_for;
+    if (IdentifierStr == "int")
+      return tok_int;
+    if (IdentifierStr == "bool")
+      return tok_bool;
     return tok_identifier;
   }
 
