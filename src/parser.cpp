@@ -4,6 +4,7 @@
 #include "lexer.h"
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/Support/CodeGen.h>
 #include <llvm/Support/raw_ostream.h>
 #include <map>
 #include <memory>
@@ -98,6 +99,91 @@ std::unique_ptr<ExprAST> ParseIdentifierExpr() {
   return std::make_unique<CallExprAST>(IdName, std::move(Args));
 }
 
+std::unique_ptr<ExprAST> ParseIfExpr() {
+  getNextToken();
+
+  if (CurTok != '(')
+    return LogError("Expected '(' in if");
+  getNextToken();
+
+  auto Cond = ParseExpression();
+  if (!Cond)
+    return nullptr;
+
+  if (CurTok != ')')
+    return LogError("Expected ')' in if");
+  getNextToken();
+
+  auto Then = ParseExpression();
+  if (!Then)
+    return nullptr;
+
+  if (CurTok != tok_else)
+    return LogError("Expected else");
+  getNextToken();
+
+  auto Else = ParseExpression();
+  if (!Else)
+    return nullptr;
+
+  return std::make_unique<IfExprAST>(std::move(Cond), std::move(Then),
+                                     std::move(Else));
+}
+
+enum CXType ParseType();
+
+std::unique_ptr<ExprAST> ParseForExpr() {
+  getNextToken(); // eat "for"
+
+  if (CurTok != '(')
+    return LogError("Expect '(' after for");
+  getNextToken();
+
+  enum CXType IdType = ParseType();
+  if (IdType == typ_err)
+    return nullptr;
+
+  if (CurTok != tok_identifier)
+    return LogError("Expect identifier in for");
+
+  std::string IdName = IdentifierStr;
+  getNextToken();
+
+  if (CurTok != '=')
+    return LogError("Expected '=' in for");
+  getNextToken();
+
+  auto Start = ParseExpression();
+  if (!Start)
+    return nullptr;
+  if (CurTok != ';')
+    return LogError("Expected ';' after loop variable definition");
+  getNextToken();
+
+  auto End = ParseExpression();
+  if (!End)
+    return nullptr;
+  if (CurTok != ';')
+    return LogError("Expected ';' after loop condition");
+  getNextToken();
+
+  auto Step = ParseExpression();
+  if (!Step)
+    return nullptr;
+
+  if (CurTok != ')')
+    return LogError("Expect ')' in for");
+  getNextToken();
+
+  auto Body = ParseExpression();
+  if (!Body)
+    return nullptr;
+
+  return std::make_unique<ForExprAST>(IdType, IdName, std::move(Start),
+                                      std::move(End), std::move(Step),
+                                      std::move(Body));
+}
+
 std::unique_ptr<ExprAST> ParsePrimary() {
   switch (CurTok) {
   default:
@@ -108,8 +194,14 @@ std::unique_ptr<ExprAST> ParsePrimary() {
     return ParseNumberExpr();
   case tok_true:
     return ParseBooleanExpr();
+  case tok_false:
+    return ParseBooleanExpr();
   case '(':
     return ParseParenExpr();
+  case tok_if:
+    return ParseIfExpr();
+  case tok_for:
+    return ParseForExpr();
   }
 }
 
@@ -221,7 +313,7 @@ std::unique_ptr<PrototypeAST> ParsePrototype() {
 }
 
 // 'def' prototype expression
-static std::unique_ptr<FunctionAST> ParseDefinition() {
+std::unique_ptr<FunctionAST> ParseDefinition() {
   getNextToken();
   auto Proto = ParsePrototype();
   if (!Proto)
@@ -280,7 +372,8 @@ void MainLoop() {
     switch (CurTok) {
     case tok_eof:
       return;
-    case ';':
+    // case ';':
+    case '$':
       getNextToken();
       break;
     case tok_def:

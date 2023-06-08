@@ -20,18 +20,19 @@ enum Token {
   tok_while = -9,
   tok_write = -10,
   tok_read = -11,
+  tok_for = -12,
 
   // operators
-  tok_le = -12,   // <=
-  tok_ge = -13,   // >=
-  tok_eq = -14,   // ==
-  tok_ne = -15,   // !=
-  tok_lor = -16,  // ||
-  tok_land = -17, // &&
+  tok_le = -13,   // <=
+  tok_ge = -14,   // >=
+  tok_eq = -15,   // ==
+  tok_ne = -16,   // !=
+  tok_lor = -17,  // ||
+  tok_land = -18, // &&
 
   // var definition
-  tok_int = -18,
-  tok_bool = -19,
+  tok_int = -19,
+  tok_bool = -20,
 };
 
 extern std::string IdentifierStr;
