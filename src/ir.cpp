@@ -10,7 +10,7 @@
 std::unique_ptr<LLVMContext> TheContext;
 std::unique_ptr<Module> TheModule;
 std::unique_ptr<IRBuilder<>> Builder;
-std::map<std::string, Value *> NamedValues;
+std::map<std::string, AllocaInst *> NamedValues;
 
 Value *LogErrorV(const char *Str) {
   LogError(Str);
@@ -28,16 +28,16 @@ Value *BooleanExprAST::codegen() {
 }
 
 Value *VariableExprAST::codegen() {
-  Value *V = NamedValues[Name];
-  if (!V)
-    LogErrorV("Unknown variable name");
+  AllocaInst *A = NamedValues[Name];
+  if (!A)
+    return LogErrorV("Unknown variable name");
 
-  if (V->getType() == Type::getInt32Ty(*TheContext))
+  if (A->getAllocatedType() == Type::getInt32Ty(*TheContext))
     setCXType(typ_int);
-  if (V->getType() == Type::getInt1Ty(*TheContext))
+  if (A->getAllocatedType() == Type::getInt1Ty(*TheContext))
     setCXType(typ_bool);
 
-  return V;
+  return Builder->CreateLoad(A->getAllocatedType(), A, Name.c_str());
 }
 
 Value *BinaryExprAST::codegen() {
@@ -88,6 +88,23 @@ Value *CallExprAST::codegen() {
     setCXType(typ_bool);
 
   return Builder->CreateCall(CalleeF, ArgsV, "calltmp");
+}
+
+AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
+                                   const enum CXType VarType,
+                                   const std::string &VarName) {
+  IRBuilder<> TmpB(&TheFunction->getEntryBlock(),
+                   TheFunction->getEntryBlock().begin());
+
+  switch (VarType) {
+  case typ_int:
+    return TmpB.CreateAlloca(Type::getInt32Ty(*TheContext), nullptr, VarName);
+  case typ_bool:
+    return TmpB.CreateAlloca(Type::getInt1Ty(*TheContext), nullptr, VarName);
+  default:
+    LogError("Unreachable!");
+    return nullptr;
+  }
 }
 
 Function *PrototypeAST::codegen() {
@@ -143,8 +160,19 @@ Function *FunctionAST::codegen() {
   Builder->SetInsertPoint(BB);
 
   NamedValues.clear();
-  for (auto &Arg : TheFunction->args())
-    NamedValues[std::string(Arg.getName())] = &Arg;
+  for (auto &Arg : TheFunction->args()) {
+    AllocaInst *Alloca = nullptr;
+
+    if (Arg.getType() == Type::getInt32Ty(*TheContext))
+      Alloca =
+          CreateEntryBlockAlloca(TheFunction, typ_int, Arg.getName().str());
+    if (Arg.getType() == Type::getInt1Ty(*TheContext))
+      Alloca =
+          CreateEntryBlockAlloca(TheFunction, typ_bool, Arg.getName().str());
+
+    Builder->CreateStore(&Arg, Alloca);
+    NamedValues[std::string(Arg.getName())] = Alloca;
+  }
 
   if (Value *RetVal = Body->codegen()) {
     if (Body->getCXType() != Proto->getRetType()) {
@@ -233,56 +261,54 @@ Value *IfExprAST::codegen() {
 }
 
 Value *ForExprAST::codegen() {
+  Function *TheFunction = Builder->GetInsertBlock()->getParent();
+
+  AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarType, VarName);
+
   Value *StartVal = Start->codegen();
   if (!StartVal)
     return nullptr;
-
   if (Start->getCXType() != VarType)
     return LogErrorV("The loop variable was assigned a value of other type");
 
-  Function *TheFunction = Builder->GetInsertBlock()->getParent();
-  BasicBlock *PreheaderBB = Builder->GetInsertBlock();
-  BasicBlock *LoopBB = BasicBlock::Create(*TheContext, "loop", TheFunction);
+  Builder->CreateStore(StartVal, Alloca);
 
-  Builder->CreateBr(LoopBB);
+  AllocaInst *OldAlloca = NamedValues[VarName];
+  NamedValues[VarName] = Alloca;
 
-  Builder->SetInsertPoint(LoopBB);
-
-  PHINode *Variable =
-      Builder->CreatePHI(Type::getInt32Ty(*TheContext), 2, VarName);
-
-  Variable->addIncoming(StartVal, PreheaderBB);
-
-  Value *OldVal = NamedValues[VarName];
-  NamedValues[VarName] = Variable;
-
-  if (!Body->codegen())
-    return nullptr;
-
-  Value *StepVal = Step->codegen();
-  if (!StepVal)
-    return nullptr;
-  Value *NextVar = Builder->CreateAdd(Variable, StepVal, "nextvar");
+  BasicBlock *CondBB = BasicBlock::Create(*TheContext, "cond", TheFunction);
+  Builder->CreateBr(CondBB);
+  Builder->SetInsertPoint(CondBB);
 
   Value *EndCond = End->codegen();
   if (!EndCond)
     return nullptr;
-
   if (End->getCXType() != typ_bool)
     return LogErrorV("Expected boolean expression in for");
 
-  BasicBlock *LoopEndBB = Builder->GetInsertBlock();
-  BasicBlock *AfterBB =
-      BasicBlock::Create(*TheContext, "afterloop", TheFunction);
+  BasicBlock *LoopBB = BasicBlock::Create(*TheContext, "loop", TheFunction);
+  BasicBlock *AfterBB = BasicBlock::Create(*TheContext, "afterloop");
 
   Builder->CreateCondBr(EndCond, LoopBB, AfterBB);
+  Builder->SetInsertPoint(LoopBB);
 
+  if (!Body->codegen())
+    return nullptr;
+
+  BasicBlock *StepBB = BasicBlock::Create(*TheContext, "step", TheFunction);
+  Builder->CreateBr(StepBB);
+  Builder->SetInsertPoint(StepBB);
+
+  if (!Step->codegen())
+    return nullptr;
+
+  Builder->CreateBr(CondBB);
+
+  TheFunction->insert(TheFunction->end(), AfterBB);
   Builder->SetInsertPoint(AfterBB);
 
-  Variable->addIncoming(NextVar, LoopEndBB);
-
-  if (OldVal)
-    NamedValues[VarName] = OldVal;
+  if (OldAlloca)
+    NamedValues[VarName] = OldAlloca;
   else
     NamedValues.erase(VarName);
 
