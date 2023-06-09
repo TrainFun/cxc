@@ -232,4 +232,61 @@ Value *IfExprAST::codegen() {
   return PN;
 }
 
-Value *ForExprAST::codegen() {}
+Value *ForExprAST::codegen() {
+  Value *StartVal = Start->codegen();
+  if (!StartVal)
+    return nullptr;
+
+  if (Start->getCXType() != VarType)
+    return LogErrorV("The loop variable was assigned a value of other type");
+
+  Function *TheFunction = Builder->GetInsertBlock()->getParent();
+  BasicBlock *PreheaderBB = Builder->GetInsertBlock();
+  BasicBlock *LoopBB = BasicBlock::Create(*TheContext, "loop", TheFunction);
+
+  Builder->CreateBr(LoopBB);
+
+  Builder->SetInsertPoint(LoopBB);
+
+  PHINode *Variable =
+      Builder->CreatePHI(Type::getInt32Ty(*TheContext), 2, VarName);
+
+  Variable->addIncoming(StartVal, PreheaderBB);
+
+  Value *OldVal = NamedValues[VarName];
+  NamedValues[VarName] = Variable;
+
+  if (!Body->codegen())
+    return nullptr;
+
+  Value *StepVal = Step->codegen();
+  if (!StepVal)
+    return nullptr;
+  Value *NextVar = Builder->CreateAdd(Variable, StepVal, "nextvar");
+
+  Value *EndCond = End->codegen();
+  if (!EndCond)
+    return nullptr;
+
+  if (End->getCXType() != typ_bool)
+    return LogErrorV("Expected boolean expression in for");
+
+  BasicBlock *LoopEndBB = Builder->GetInsertBlock();
+  BasicBlock *AfterBB =
+      BasicBlock::Create(*TheContext, "afterloop", TheFunction);
+
+  Builder->CreateCondBr(EndCond, LoopBB, AfterBB);
+
+  Builder->SetInsertPoint(AfterBB);
+
+  Variable->addIncoming(NextVar, LoopEndBB);
+
+  if (OldVal)
+    NamedValues[VarName] = OldVal;
+  else
+    NamedValues.erase(VarName);
+
+  setCXType(typ_int);
+
+  return Constant::getNullValue(Type::getInt32Ty(*TheContext));
+}
