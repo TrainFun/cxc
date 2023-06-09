@@ -290,3 +290,19 @@ Value *ForExprAST::codegen() {
 
   return Constant::getNullValue(Type::getInt32Ty(*TheContext));
 }
+
+Value *UnaryExprAST::codegen() {
+  Value *V = Operand->codegen();
+  if (!V)
+    return nullptr;
+
+  switch (Opcode) {
+  default:
+    return LogErrorV("Invalid unary operator");
+  case '!':
+    if (Operand->getCXType() != typ_bool)
+      return LogErrorV("Expected boolean expression after '!'");
+    setCXType(typ_bool);
+    return Builder->CreateNot(V);
+  }
+}
