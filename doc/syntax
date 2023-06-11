@@ -1,0 +1,34 @@
+program ::= decls
+decls ::= decl*
+decl ::= ( "const" )? type ID declafter
+declafter ::= vardeclafter | funcdeclafter
+vardeclafter ::= ( "=" expr )? ";"
+funcdeclafter ::= "(" ( type ID ( "," type ID )* )? ")" block
+vardecl ::= type ID vardeclafter
+block ::= "{" ( vardecl | stmt )* "}"
+stmt ::= ( expr )? ";" | ifstmt | switchstmt | whilestmt | dostmt | forstmt | untilstmt | readstmt | writestmt | block | "continue" ";" | "break" ";" | "exit" ";" | retstmt
+ifstmt ::= "if" "(" expr ")" stmt ( "else" stmt )?
+switchstmt ::= "switch" "(" expr ")" "{" caselist ( "default" ":" ( stmt )* caselist )? "}"
+caselist ::= ( "case" expr ":" ( stmt )* )*
+whilestmt ::= "while" "(" expr ")" stmt
+dostmt ::= "do" stmt "while" "(" expr ")" ";"
+forstmt ::= "for" "(" ( type ID "=" expr )? ";" ( expr )? ";" ( expr )? ")" stmt
+untilstmt ::= "repeat" stmt "until" "(" expr ")" ";"
+readstmt ::= "read" ID ";"
+writestmt ::= "write" expr ";"
+retstmt ::= "return" expr ";"
+expr ::= binexpr
+binexpr ::= uniexpr RHS
+RHS ::= ( binOP expr )?
+uniexpr ::= primexpr | uniOP uniexpr
+primexpr ::= NUM | BOOLEAN | ID | parenexpr
+parenexpr ::= "(" expr ")"
+
+BOOLEAN ::= "true" | "false"
+type ::= "int" | "bool" | "double"
+uniOP ::= uniOPint | uniOPbool
+uniOPint ::= "++" | "--" | "ODD"
+uniOPbool ::= "!"
+binOP ::= binOPnum | binOPbool
+binOPnum ::= "+" | "-" | "*" | "/" | "%"
+binOPbool ::= "<" | ">" | "==" | "!=" | "<=" | ">="
