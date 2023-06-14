@@ -11,9 +11,9 @@ CXXFLAGS := $(shell llvm-config --cxxflags) -Wall -Wextra
 LDFLAGS  := -g
 LDLIBS   := -lstdc++ -lm $(shell llvm-config --ldflags --system-libs --libs core)
 
-.PHONY: all clean
+.PHONY: all clean doc
 
-all: $(EXE)
+all: $(EXE) doc
 
 $(EXE): $(OBJ) | $(BIN_DIR)
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
@@ -28,3 +28,8 @@ clean:
 	@$(RM) -rv $(BIN_DIR) $(OBJ_DIR)
 
 -include $(OBJ:.o=.d)
+
+doc: doc/syntax.md
+
+doc/syntax.md: doc/syntax
+	java -jar rr/rr.war -md -out:$@ $^
