@@ -206,7 +206,7 @@ std::unique_ptr<ExprAST> ParsePrimary() {
 }
 
 std::unique_ptr<ExprAST> ParseUnary() {
-  if (!isascii(CurTok) || CurTok == '(' || CurTok == ',')
+  if (!isascii(CurTok) || CurTok == '(')
     return ParsePrimary();
 
   int Opc = CurTok;

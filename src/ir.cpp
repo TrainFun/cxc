@@ -41,6 +41,31 @@ Value *VariableExprAST::codegen() {
 }
 
 Value *BinaryExprAST::codegen() {
+  if (Op == '=') {
+    VariableExprAST *LHSE = static_cast<VariableExprAST *>(LHS.get());
+    if (!LHSE)
+      return LogErrorV("destination of '=' must be a variable");
+
+    Value *Val = RHS->codegen();
+    if (!Val)
+      return nullptr;
+
+    AllocaInst *Variable = NamedValues[LHSE->getName()];
+    if (!Variable)
+      return LogErrorV("Unknown variable name");
+
+    if (Variable->getAllocatedType() == Type::getInt32Ty(*TheContext))
+      setCXType(typ_int);
+    if (Variable->getAllocatedType() == Type::getInt1Ty(*TheContext))
+      setCXType(typ_bool);
+
+    if (RHS->getCXType() != getCXType())
+      return LogErrorV("Different types on each side of '='");
+
+    Builder->CreateStore(Val, Variable);
+    return Val;
+  }
+
   Value *L = LHS->codegen();
   Value *R = RHS->codegen();
   if (!L || !R)
@@ -50,6 +75,8 @@ Value *BinaryExprAST::codegen() {
     return LogErrorV("Binary operation on expressions of different types");
 
   switch (Op) {
+  default:
+    return LogErrorV("invalid binary operator");
   case '+':
     setCXType(LHS->getCXType());
     return Builder->CreateAdd(L, R, "addtmp");
@@ -62,8 +89,6 @@ Value *BinaryExprAST::codegen() {
   case '<':
     setCXType(typ_bool);
     return Builder->CreateICmpULT(L, R, "cmptmp");
-  default:
-    return LogErrorV("invalid binary operator");
   }
 }
 
