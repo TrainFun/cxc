@@ -4,7 +4,7 @@
 #include <cstdio>
 
 int main() {
-  BinopPrecedence['='] = 10;
+  BinopPrecedence['='] = 2;
   BinopPrecedence[tok_land] = 20;
   BinopPrecedence[tok_lor] = 20;
   BinopPrecedence['<'] = 30;

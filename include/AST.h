@@ -1,6 +1,7 @@
 #pragma once
 
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/Value.h>
 #include <memory>
 #include <string>
@@ -47,6 +48,7 @@ class VariableExprAST : public ExprAST {
 
 public:
   VariableExprAST(const std::string &Name) : Name(Name) {}
+  const std::string getName() const { return Name; }
   Value *codegen() override;
 };
 
