@@ -5,7 +5,7 @@
 #include <string>
 
 std::string IdentifierStr;
-unsigned NumVal;
+double NumVal;
 
 /// gettok - Return the next token from standard input.
 int gettok() {
@@ -21,8 +21,8 @@ int gettok() {
     while (isalnum((LastChar = getchar())))
       IdentifierStr += LastChar;
 
-    if (IdentifierStr == "def")
-      return tok_def;
+    // if (IdentifierStr == "def")
+    //   return tok_def;
     if (IdentifierStr == "true")
       return tok_true;
     if (IdentifierStr == "false")
@@ -31,31 +31,63 @@ int gettok() {
       return tok_if;
     if (IdentifierStr == "else")
       return tok_else;
+    if (IdentifierStr == "switch")
+      return tok_switch;
+    if (IdentifierStr == "default")
+      return tok_default;
+    if (IdentifierStr == "case")
+      return tok_case;
     if (IdentifierStr == "while")
       return tok_while;
+    if (IdentifierStr == "do")
+      return tok_do;
+    if (IdentifierStr == "for")
+      return tok_for;
+    if (IdentifierStr == "repeat")
+      return tok_repeat;
+    if (IdentifierStr == "until")
+      return tok_until;
     if (IdentifierStr == "write")
       return tok_write;
     if (IdentifierStr == "read")
       return tok_read;
-    if (IdentifierStr == "for")
-      return tok_for;
+    if (IdentifierStr == "continue")
+      return tok_continue;
+    if (IdentifierStr == "break")
+      return tok_break;
+    if (IdentifierStr == "return")
+      return tok_return;
+    if (IdentifierStr == "exit")
+      return tok_exit;
     if (IdentifierStr == "int")
       return tok_int;
     if (IdentifierStr == "bool")
       return tok_bool;
+    if (IdentifierStr == "double")
+      return tok_double;
+    if (IdentifierStr == "const")
+      return tok_const;
+    if (IdentifierStr == "ODD")
+      return tok_ODD;
     return tok_identifier;
   }
 
   // Numbers.
   if (isdigit(LastChar)) {
+    bool isDouble = false;
     std::string NumStr;
     do {
+      if (LastChar == '.')
+        isDouble = true;
       NumStr += LastChar;
       LastChar = getchar();
-    } while (isdigit(LastChar));
+    } while (isdigit(LastChar) || LastChar == '.');
 
-    NumVal = atoi(NumStr.c_str());
-    return tok_number;
+    NumVal = strtod(NumStr.c_str(), 0);
+
+    if (isDouble)
+      return tok_doubleliteral;
+    return tok_intliteral;
   }
 
   if (LastChar == EOF)
@@ -88,6 +120,14 @@ int gettok() {
   if (ThisChar == '&' && LastChar == '&') {
     LastChar = getchar();
     return tok_land;
+  }
+  if (ThisChar == '+' && LastChar == '+') {
+    LastChar = getchar();
+    return tok_increment;
+  }
+  if (ThisChar == '-' && LastChar == '-') {
+    LastChar = getchar();
+    return tok_decrement;
   }
 
   // Comments.
