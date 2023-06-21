@@ -17,12 +17,12 @@ int main() {
   BinopPrecedence['-'] = 40;
   BinopPrecedence['*'] = 50;
 
-  fprintf(stderr, "ready> ");
+  // fprintf(stderr, "ready> ");
   getNextToken();
 
   InitializeModule();
 
   MainLoop();
 
-  TheModule->print(errs(), nullptr);
+  TheModule->print(outs(), nullptr);
 }

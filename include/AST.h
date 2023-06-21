@@ -30,12 +30,15 @@ public:
   virtual Value *codegen() = 0;
 };
 
-class BlockElemAST {};
+class BlockElemAST {
+  virtual bool isVarDecl() = 0;
+};
 
 class StmtAST : public BlockElemAST {
 public:
   virtual ~StmtAST() = default;
   virtual Value *codegen() = 0;
+  bool isVarDecl() override { return false; }
 };
 
 class ExprStmtAST : public StmtAST {
@@ -140,6 +143,7 @@ public:
   bool isConstVar() { return isConst; }
   enum CXType getType() { return Type; }
   const std::string &getName() const { return Name; }
+  bool isVarDecl() override { return true; }
 };
 
 class GlobVarDeclAST : public VarDeclAST {
