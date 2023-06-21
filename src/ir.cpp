@@ -64,7 +64,7 @@ Value *VariableExprAST::codegen() {
 
 Value *BinaryExprAST::codegen() {
   if (Op == '=') {
-    VariableExprAST *LHSE = static_cast<VariableExprAST *>(LHS.get());
+    VariableExprAST *LHSE = dynamic_cast<VariableExprAST *>(LHS.get());
     if (!LHSE)
       return LogErrorV("destination of '=' must be a variable");
 
