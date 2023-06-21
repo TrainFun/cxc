@@ -9,4 +9,4 @@ using namespace llvm;
 extern std::unique_ptr<LLVMContext> TheContext;
 extern std::unique_ptr<Module> TheModule;
 extern std::unique_ptr<IRBuilder<>> Builder;
-extern std::map<std::string, AllocaInst *> NamedValues;
+extern std::map<std::string, std::pair<bool, AllocaInst *>> NamedValues;

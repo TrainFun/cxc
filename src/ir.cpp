@@ -1,25 +1,33 @@
 #include "ir.h"
 #include "AST.h"
+#include "lexer.h"
 #include "parser.h"
+#include <llvm/ADT/APFloat.h>
 #include <llvm/ADT/APInt.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
 #include <memory>
+#include <utility>
 
 std::unique_ptr<LLVMContext> TheContext;
 std::unique_ptr<Module> TheModule;
 std::unique_ptr<IRBuilder<>> Builder;
-std::map<std::string, AllocaInst *> NamedValues;
+std::map<std::string, std::pair<bool, AllocaInst *>> NamedValues;
 
 Value *LogErrorV(const char *Str) {
   LogError(Str);
   return nullptr;
 }
 
-Value *NumberExprAST::codegen() {
+Value *IntExprAST::codegen() {
   setCXType(typ_int);
   return ConstantInt::get(*TheContext, APInt(32, Val));
+}
+
+Value *DoubleExprAST::codegen() {
+  setCXType(typ_int);
+  return ConstantFP::get(*TheContext, APFloat(Val));
 }
 
 Value *BooleanExprAST::codegen() {
@@ -28,14 +36,28 @@ Value *BooleanExprAST::codegen() {
 }
 
 Value *VariableExprAST::codegen() {
-  AllocaInst *A = NamedValues[Name];
-  if (!A)
-    return LogErrorV("Unknown variable name");
+  AllocaInst *A = NamedValues[Name].second;
+  if (!A) {
+    auto *G = TheModule->getGlobalVariable(Name);
+    if (!G)
+      return LogErrorV("Unknown variable name");
+
+    if (G->getValueType() == Type::getInt32Ty(*TheContext))
+      setCXType(typ_int);
+    if (G->getValueType() == Type::getInt1Ty(*TheContext))
+      setCXType(typ_bool);
+    if (G->getValueType() == Type::getDoubleTy(*TheContext))
+      setCXType(typ_double);
+
+    return Builder->CreateLoad(G->getValueType(), G, Name.c_str());
+  }
 
   if (A->getAllocatedType() == Type::getInt32Ty(*TheContext))
     setCXType(typ_int);
   if (A->getAllocatedType() == Type::getInt1Ty(*TheContext))
     setCXType(typ_bool);
+  if (A->getAllocatedType() == Type::getDoubleTy(*TheContext))
+    setCXType(typ_double);
 
   return Builder->CreateLoad(A->getAllocatedType(), A, Name.c_str());
 }
@@ -50,7 +72,7 @@ Value *BinaryExprAST::codegen() {
     if (!Val)
       return nullptr;
 
-    AllocaInst *Variable = NamedValues[LHSE->getName()];
+    AllocaInst *Variable = NamedValues[LHSE->getName()].second;
     if (!Variable)
       return LogErrorV("Unknown variable name");
 
@@ -79,16 +101,160 @@ Value *BinaryExprAST::codegen() {
     return LogErrorV("invalid binary operator");
   case '+':
     setCXType(LHS->getCXType());
-    return Builder->CreateAdd(L, R, "addtmp");
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return Builder->CreateAdd(L, R, "addtmp");
+    case typ_bool:
+      return LogErrorV("operator '+' not defined for bool");
+    case typ_double:
+      return Builder->CreateFAdd(L, R, "addtmp");
+    }
   case '-':
     setCXType(LHS->getCXType());
-    return Builder->CreateSub(L, R, "subtmp");
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return Builder->CreateSub(L, R, "subtmp");
+    case typ_bool:
+      return LogErrorV("operator '-' not defined for bool");
+    case typ_double:
+      return Builder->CreateFSub(L, R, "subtmp");
+    }
   case '*':
     setCXType(LHS->getCXType());
-    return Builder->CreateMul(L, R, "multmp");
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return Builder->CreateMul(L, R, "multmp");
+    case typ_bool:
+      return LogErrorV("operator '*' not defined for bool");
+    case typ_double:
+      return Builder->CreateFMul(L, R, "multmp");
+    }
+  case '/':
+    setCXType(LHS->getCXType());
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return Builder->CreateUDiv(L, R, "multmp");
+    case typ_bool:
+      return LogErrorV("operator '/' not defined for bool");
+    case typ_double:
+      return Builder->CreateFDiv(L, R, "multmp");
+    }
+  case '%':
+    setCXType(LHS->getCXType());
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return Builder->CreateURem(L, R, "multmp");
+    case typ_bool:
+      return LogErrorV("operator '%' not defined for bool");
+    case typ_double:
+      return LogErrorV("operator '%' not defined for double");
+    }
   case '<':
     setCXType(typ_bool);
-    return Builder->CreateICmpULT(L, R, "cmptmp");
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return Builder->CreateICmpULT(L, R, "cmptmp");
+    case typ_bool:
+      return LogErrorV("operator '<' not defined for bool");
+    case typ_double:
+      return Builder->CreateFCmpOLT(L, R, "cmptmp");
+    }
+  case '>':
+    setCXType(typ_bool);
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return Builder->CreateICmpUGT(L, R, "cmptmp");
+    case typ_bool:
+      return LogErrorV("operator '>' not defined for bool");
+    case typ_double:
+      return Builder->CreateFCmpOGT(L, R, "cmptmp");
+    }
+  case tok_eq:
+    setCXType(typ_bool);
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return Builder->CreateICmpEQ(L, R, "cmptmp");
+    case typ_bool:
+      return Builder->CreateICmpEQ(L, R, "cmptmp");
+    case typ_double:
+      return Builder->CreateFCmpOEQ(L, R, "cmptmp");
+    }
+  case tok_ne:
+    setCXType(typ_bool);
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return Builder->CreateICmpNE(L, R, "cmptmp");
+    case typ_bool:
+      return Builder->CreateICmpNE(L, R, "cmptmp");
+    case typ_double:
+      return Builder->CreateFCmpONE(L, R, "cmptmp");
+    }
+  case tok_le:
+    setCXType(typ_bool);
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return Builder->CreateICmpULE(L, R, "cmptmp");
+    case typ_bool:
+      return LogErrorV("operator '<=' not defined for bool");
+    case typ_double:
+      return Builder->CreateFCmpOLE(L, R, "cmptmp");
+    }
+  case tok_ge:
+    setCXType(typ_bool);
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return Builder->CreateICmpUGE(L, R, "cmptmp");
+    case typ_bool:
+      return LogErrorV("operator '>=' not defined for bool");
+    case typ_double:
+      return Builder->CreateFCmpOGE(L, R, "cmptmp");
+    }
+  case tok_lor:
+    setCXType(typ_bool);
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return LogErrorV("operator '||' not defined for int");
+    case typ_bool:
+      return Builder->CreateLogicalOr(L, R, "lortmp");
+    case typ_double:
+      return LogErrorV("operator '||' not defined for double");
+    }
+  case tok_land:
+    setCXType(typ_bool);
+    switch (LHS->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_int:
+      return LogErrorV("operator '&&' not defined for int");
+    case typ_bool:
+      return Builder->CreateLogicalAnd(L, R, "landtmp");
+    case typ_double:
+      return LogErrorV("operator '&&' not defined for double");
+    }
   }
 }
 
@@ -111,6 +277,8 @@ Value *CallExprAST::codegen() {
     setCXType(typ_int);
   if (CalleeF->getReturnType() == Type::getInt1Ty(*TheContext))
     setCXType(typ_bool);
+  if (CalleeF->getReturnType() == Type::getDoubleTy(*TheContext))
+    setCXType(typ_double);
 
   return Builder->CreateCall(CalleeF, ArgsV, "calltmp");
 }
@@ -126,6 +294,8 @@ AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
     return TmpB.CreateAlloca(Type::getInt32Ty(*TheContext), nullptr, VarName);
   case typ_bool:
     return TmpB.CreateAlloca(Type::getInt1Ty(*TheContext), nullptr, VarName);
+  case typ_double:
+    return TmpB.CreateAlloca(Type::getDoubleTy(*TheContext), nullptr, VarName);
   default:
     LogError("Unreachable!");
     return nullptr;
@@ -135,12 +305,15 @@ AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 Function *PrototypeAST::codegen() {
   std::vector<Type *> ArgsT;
   for (unsigned i = 0, e = Args.size(); i != e; ++i) {
-    switch (Args[i].first) {
+    switch (Args[i]->getType()) {
     case typ_int:
       ArgsT.push_back(Type::getInt32Ty(*TheContext));
       break;
     case typ_bool:
       ArgsT.push_back(Type::getInt1Ty(*TheContext));
+      break;
+    case typ_double:
+      ArgsT.push_back(Type::getDoubleTy(*TheContext));
       break;
     default:
       return (Function *)LogErrorV("invalid parameter type");
@@ -155,6 +328,9 @@ Function *PrototypeAST::codegen() {
   case typ_bool:
     FT = FunctionType::get(Type::getInt1Ty(*TheContext), ArgsT, false);
     break;
+  case typ_double:
+    FT = FunctionType::get(Type::getDoubleTy(*TheContext), ArgsT, false);
+    break;
   default:
     return (Function *)LogErrorV("invalid return type");
   }
@@ -164,7 +340,7 @@ Function *PrototypeAST::codegen() {
 
   unsigned Idx = 0;
   for (auto &Arg : F->args())
-    Arg.setName(Args[Idx++].second);
+    Arg.setName(Args[Idx++]->getName());
 
   return F;
 }
@@ -185,6 +361,7 @@ Function *FunctionAST::codegen() {
   Builder->SetInsertPoint(BB);
 
   NamedValues.clear();
+  unsigned Idx = 0;
   for (auto &Arg : TheFunction->args()) {
     AllocaInst *Alloca = nullptr;
 
@@ -194,25 +371,42 @@ Function *FunctionAST::codegen() {
     if (Arg.getType() == Type::getInt1Ty(*TheContext))
       Alloca =
           CreateEntryBlockAlloca(TheFunction, typ_bool, Arg.getName().str());
+    if (Arg.getType() == Type::getDoubleTy(*TheContext))
+      Alloca =
+          CreateEntryBlockAlloca(TheFunction, typ_double, Arg.getName().str());
 
     Builder->CreateStore(&Arg, Alloca);
-    NamedValues[std::string(Arg.getName())] = Alloca;
+    NamedValues[std::string(Arg.getName())] =
+        std::make_pair(Proto->getArgs()[Idx]->isConstVar(), Alloca);
   }
 
-  if (Value *RetVal = Body->codegen()) {
-    if (Body->getCXType() != Proto->getRetType()) {
-      TheFunction->eraseFromParent();
-      switch (Proto->getRetType()) {
-      case typ_int:
-        return (Function *)LogErrorV("Expected return type \"int\"");
-      case typ_bool:
-        return (Function *)LogErrorV("Expected return type \"bool\"");
-      default:
-        return (Function *)LogErrorV("Unreachable!");
-      }
-    }
+  if (Body->codegen()) {
+    // if (Body->getCXType() != Proto->getRetType()) {
+    //   TheFunction->eraseFromParent();
+    //   switch (Proto->getRetType()) {
+    //   case typ_int:
+    //     return (Function *)LogErrorV("Expected return type \"int\"");
+    //   case typ_bool:
+    //     return (Function *)LogErrorV("Expected return type \"bool\"");
+    //   default:
+    //     return (Function *)LogErrorV("Unreachable!");
+    //   }
+    // }
 
-    Builder->CreateRet(RetVal);
+    switch (Proto->getRetType()) {
+    case typ_int:
+      Builder->CreateRet(Constant::getNullValue(Type::getInt32Ty(*TheContext)));
+      break;
+    case typ_bool:
+      Builder->CreateRet(Constant::getNullValue(Type::getInt1Ty(*TheContext)));
+      break;
+    case typ_double:
+      Builder->CreateRet(
+          Constant::getNullValue(Type::getDoubleTy(*TheContext)));
+      break;
+    default:
+      return (Function *)LogErrorV("Unreachable!");
+    }
 
     verifyFunction(*TheFunction);
 
@@ -223,7 +417,7 @@ Function *FunctionAST::codegen() {
   return nullptr;
 }
 
-Value *IfExprAST::codegen() {
+Value *IfStmtAST::codegen() {
   Value *CondV = Cond->codegen();
   if (!CondV)
     return nullptr;
@@ -255,61 +449,78 @@ Value *IfExprAST::codegen() {
   TheFunction->insert(TheFunction->end(), ElseBB);
   Builder->SetInsertPoint(ElseBB);
 
-  Value *ElseV = Else->codegen();
-  if (!ElseV)
-    return nullptr;
+  if (Else) {
+    Value *ElseV = Else->codegen();
+    if (!ElseV)
+      return nullptr;
+  }
 
-  if (ThenV->getType() != ElseV->getType())
-    return LogErrorV("Expected expressions of the same type in if-else");
-  setCXType(Then->getCXType());
+  // if (ThenV->getType() != ElseV->getType())
+  //   return LogErrorV("Expected expressions of the same type in if-else");
+  // setCXType(Then->getCXType());
 
   Builder->CreateBr(MergeBB);
   ElseBB = Builder->GetInsertBlock();
 
   TheFunction->insert(TheFunction->end(), MergeBB);
   Builder->SetInsertPoint(MergeBB);
-  PHINode *PN = nullptr;
-  switch (getCXType()) {
-  case typ_int:
-    PN = Builder->CreatePHI(Type::getInt32Ty(*TheContext), 2, "iftmp");
-    break;
-  case typ_bool:
-    PN = Builder->CreatePHI(Type::getInt1Ty(*TheContext), 2, "iftmp");
-    break;
-  default:
-    LogErrorV("Unreachable!");
-  }
+  // PHINode *PN = nullptr;
+  // switch (getCXType()) {
+  // case typ_int:
+  //   PN = Builder->CreatePHI(Type::getInt32Ty(*TheContext), 2, "iftmp");
+  //   break;
+  // case typ_bool:
+  //   PN = Builder->CreatePHI(Type::getInt1Ty(*TheContext), 2, "iftmp");
+  //   break;
+  // default:
+  //   LogErrorV("Unreachable!");
+  // }
+  //
+  // PN->addIncoming(ThenV, ThenBB);
+  // PN->addIncoming(ElseV, ElseBB);
+  // return PN;
 
-  PN->addIncoming(ThenV, ThenBB);
-  PN->addIncoming(ElseV, ElseBB);
-  return PN;
+  return Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
 
-Value *ForExprAST::codegen() {
+Value *ForStmtAST::codegen() {
   Function *TheFunction = Builder->GetInsertBlock()->getParent();
 
   AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarType, VarName);
 
-  Value *StartVal = Start->codegen();
-  if (!StartVal)
-    return nullptr;
-  if (Start->getCXType() != VarType)
-    return LogErrorV("The loop variable was assigned a value of other type");
+  Value *StartVal = nullptr;
+  bool OldIsConst;
+  AllocaInst *OldAlloca;
 
-  Builder->CreateStore(StartVal, Alloca);
+  if (Start) {
+    StartVal = Start->codegen();
+    if (!StartVal)
+      return nullptr;
+    if (Start->getCXType() != VarType)
+      return LogErrorV("The loop variable was assigned a value of other type");
 
-  AllocaInst *OldAlloca = NamedValues[VarName];
-  NamedValues[VarName] = Alloca;
+    Builder->CreateStore(StartVal, Alloca);
+
+    OldIsConst = NamedValues[VarName].first;
+    OldAlloca = NamedValues[VarName].second;
+    NamedValues[VarName].first = false;
+    NamedValues[VarName].second = Alloca;
+  }
 
   BasicBlock *CondBB = BasicBlock::Create(*TheContext, "cond", TheFunction);
   Builder->CreateBr(CondBB);
   Builder->SetInsertPoint(CondBB);
 
-  Value *EndCond = End->codegen();
-  if (!EndCond)
-    return nullptr;
-  if (End->getCXType() != typ_bool)
-    return LogErrorV("Expected boolean expression in for");
+  Value *EndCond = nullptr;
+  if (End) {
+    EndCond = End->codegen();
+    if (!EndCond)
+      return nullptr;
+    if (End->getCXType() != typ_bool)
+      return LogErrorV("Expected boolean expression in for");
+  } else
+    EndCond =
+        Constant::getIntegerValue(Type::getInt1Ty(*TheContext), APInt(1, 1));
 
   BasicBlock *LoopBB = BasicBlock::Create(*TheContext, "loop", TheFunction);
   BasicBlock *AfterBB = BasicBlock::Create(*TheContext, "afterloop");
@@ -324,8 +535,10 @@ Value *ForExprAST::codegen() {
   Builder->CreateBr(StepBB);
   Builder->SetInsertPoint(StepBB);
 
-  if (!Step->codegen())
-    return nullptr;
+  if (Step) {
+    if (!Step->codegen())
+      return nullptr;
+  }
 
   Builder->CreateBr(CondBB);
 
@@ -333,13 +546,11 @@ Value *ForExprAST::codegen() {
   Builder->SetInsertPoint(AfterBB);
 
   if (OldAlloca)
-    NamedValues[VarName] = OldAlloca;
+    NamedValues[VarName] = std::make_pair(OldIsConst, OldAlloca);
   else
     NamedValues.erase(VarName);
 
-  setCXType(typ_int);
-
-  return Constant::getNullValue(Type::getInt32Ty(*TheContext));
+  return Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
 
 Value *UnaryExprAST::codegen() {
@@ -357,3 +568,22 @@ Value *UnaryExprAST::codegen() {
     return Builder->CreateNot(V);
   }
 }
+
+Value *ExprStmtAST::codegen() {}
+
+Value *BlockStmtAST::codegen() {}
+
+Function *VarDeclAST::codegen() {}
+
+Function *GlobVarDeclAST::codegen() {}
+
+Value *SwitchStmtAST::codegen() {}
+
+Value *WhileStmtAST::codegen() {}
+Value *DoStmtAST::codegen() {}
+Value *UntilStmtAST::codegen() {}
+Value *ReadStmtAST::codegen() {}
+Value *WriteStmtAST::codegen() {}
+Value *ContStmtAST::codegen() {}
+Value *BrkStmtAST::codegen() {}
+Value *RetStmtAST::codegen() {}
