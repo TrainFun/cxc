@@ -790,7 +790,7 @@ void HandleTopLevelDeclaration() {
       DeclIR->print(errs());
       fprintf(stderr, "\n");
 
-      DeclIR->eraseFromParent();
+      // DeclIR->eraseFromParent();
     }
   } else {
     getNextToken();
@@ -799,7 +799,7 @@ void HandleTopLevelDeclaration() {
 
 void MainLoop() {
   while (true) {
-    fprintf(stderr, "ready> ");
+    // fprintf(stderr, "ready> ");
     switch (CurTok) {
     case tok_eof:
       return;

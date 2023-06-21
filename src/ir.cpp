@@ -559,21 +559,104 @@ Value *UnaryExprAST::codegen() {
     return nullptr;
 
   switch (Opcode) {
+
   default:
     return LogErrorV("Invalid unary operator");
-  case '!':
+
+  case '!': {
     if (Operand->getCXType() != typ_bool)
       return LogErrorV("Expected boolean expression after '!'");
     setCXType(typ_bool);
     return Builder->CreateNot(V);
   }
+
+  case tok_ODD: {
+    if (Operand->getCXType() != typ_int)
+      return LogErrorV("Expected int expression after 'ODD'");
+    setCXType(typ_bool);
+    auto AndTmp = Builder->CreateAnd(
+        V,
+        Constant::getIntegerValue(Type::getInt32Ty(*TheContext), APInt(32, 1)));
+    return Builder->CreateICmpEQ(
+        AndTmp,
+        Constant::getIntegerValue(Type::getInt32Ty(*TheContext), APInt(32, 1)));
+  }
+
+  case tok_increment: {
+    switch (Operand->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_bool:
+      return LogErrorV("operator ++ is not defined for bool");
+    case typ_int:
+      setCXType(typ_int);
+      return Builder->CreateAdd(
+          V, Constant::getIntegerValue(Type::getInt32Ty(*TheContext),
+                                       APInt(32, 1)));
+    case typ_double:
+      setCXType(typ_double);
+      return Builder->CreateFAdd(V, ConstantFP::get(*TheContext, APFloat(1.0)));
+    }
+  }
+
+  case tok_decrement: {
+    switch (Operand->getCXType()) {
+    default:
+      return LogErrorV("Unreachable!");
+    case typ_bool:
+      return LogErrorV("operator -- is not defined for bool");
+    case typ_int:
+      setCXType(typ_int);
+      return Builder->CreateSub(
+          V, Constant::getIntegerValue(Type::getInt32Ty(*TheContext),
+                                       APInt(32, 1)));
+    case typ_double:
+      setCXType(typ_double);
+      return Builder->CreateFSub(V, ConstantFP::get(*TheContext, APFloat(1.0)));
+    }
+  }
+  }
 }
 
-Value *ExprStmtAST::codegen() {}
+Value *ExprStmtAST::codegen() {
+  if (!Expr->codegen())
+    return nullptr;
+  return Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
 
-Value *BlockStmtAST::codegen() {}
+Value *BlockStmtAST::codegen() {
+  // Backup.
+  auto OldNamedValues = NamedValues;
 
-Function *VarDeclAST::codegen() {}
+  for (auto &Elem : Elems) {
+    auto VarDecl = dynamic_cast<VarDeclAST *>(Elem.get());
+    if (VarDecl && !VarDecl->codegen())
+      return nullptr;
+
+    auto Stmt = dynamic_cast<StmtAST *>(Elem.get());
+    if (Stmt && !Stmt->codegen())
+      return nullptr;
+  }
+
+  // Recover.
+  NamedValues = OldNamedValues;
+  return Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
+
+Function *VarDeclAST::codegen() {
+  auto TheFunction = Builder->GetInsertBlock()->getParent();
+  auto Alloca = CreateEntryBlockAlloca(TheFunction, Type, Name);
+
+  if (Val) {
+    auto V = Val->codegen();
+    if (!V)
+      return nullptr;
+    Builder->CreateStore(V, Alloca);
+  }
+
+  NamedValues[Name] = std::make_pair(isConst, Alloca);
+  return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
 
 Function *GlobVarDeclAST::codegen() {}
 
