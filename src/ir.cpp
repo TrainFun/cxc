@@ -5,6 +5,7 @@
 #include <llvm/ADT/APFloat.h>
 #include <llvm/ADT/APInt.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
 #include <memory>
@@ -18,6 +19,20 @@ std::map<std::string, std::pair<bool, AllocaInst *>> NamedValues;
 Value *LogErrorV(const char *Str) {
   LogError(Str);
   return nullptr;
+}
+
+Type *llvmTypeFromCXType(const enum CXType T) {
+  switch (T) {
+  case typ_err:
+    return nullptr;
+  case typ_int:
+    return Type::getInt32Ty(*TheContext);
+  case typ_bool:
+    return Type::getInt1Ty(*TheContext);
+  case typ_double:
+    return Type::getDoubleTy(*TheContext);
+  }
+  return nullptr; // Unreachable.
 }
 
 Value *IntExprAST::codegen() {
@@ -38,7 +53,7 @@ Value *BooleanExprAST::codegen() {
 Value *VariableExprAST::codegen() {
   AllocaInst *A = NamedValues[Name].second;
   if (!A) {
-    auto *G = TheModule->getGlobalVariable(Name);
+    auto *G = TheModule->getNamedGlobal(Name);
     if (!G)
       return LogErrorV("Unknown variable name");
 
@@ -68,18 +83,40 @@ Value *BinaryExprAST::codegen() {
     if (!LHSE)
       return LogErrorV("destination of '=' must be a variable");
 
+    if (NamedValues[LHSE->getName()].first)
+      return LogErrorV("Can't assign to const variables");
+
+    AllocaInst *Variable = NamedValues[LHSE->getName()].second;
+    if (!Variable) {
+      auto *G = TheModule->getNamedGlobal(LHSE->getName());
+      if (!G)
+        return LogErrorV("Unknown variable name");
+
+      Value *Val = RHS->codegen();
+      if (!Val)
+        return nullptr;
+
+      if (G->getValueType() == Type::getInt32Ty(*TheContext))
+        setCXType(typ_int);
+      if (G->getValueType() == Type::getInt1Ty(*TheContext))
+        setCXType(typ_bool);
+      if (G->getValueType() == Type::getDoubleTy(*TheContext))
+        setCXType(typ_double);
+
+      Builder->CreateStore(Val, G);
+      return Val;
+    }
+
     Value *Val = RHS->codegen();
     if (!Val)
       return nullptr;
-
-    AllocaInst *Variable = NamedValues[LHSE->getName()].second;
-    if (!Variable)
-      return LogErrorV("Unknown variable name");
 
     if (Variable->getAllocatedType() == Type::getInt32Ty(*TheContext))
       setCXType(typ_int);
     if (Variable->getAllocatedType() == Type::getInt1Ty(*TheContext))
       setCXType(typ_bool);
+    if (Variable->getAllocatedType() == Type::getDoubleTy(*TheContext))
+      setCXType(typ_double);
 
     if (RHS->getCXType() != getCXType())
       return LogErrorV("Different types on each side of '='");
@@ -658,7 +695,44 @@ Function *VarDeclAST::codegen() {
   return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
 
-Function *GlobVarDeclAST::codegen() {}
+Function *GlobVarDeclAST::codegen() {
+  auto Var = TheModule->getNamedGlobal(Name);
+  if (Var)
+    return (Function *)LogErrorV("Redefinition of identifier");
+
+  Value *V = nullptr;
+  if (Val) {
+    switch (Type) {
+    case typ_err:
+      return (Function *)LogErrorV("Unreachable!");
+    case typ_int: {
+      if (!dynamic_cast<IntExprAST *>(Val.get()))
+        return (Function *)LogErrorV("Expected initial value to be constant");
+      break;
+    }
+    case typ_bool: {
+      if (!dynamic_cast<BooleanExprAST *>(Val.get()))
+        return (Function *)LogErrorV("Expected initial value to be constant");
+      break;
+    }
+    case typ_double: {
+      if (!dynamic_cast<DoubleExprAST *>(Val.get()))
+        return (Function *)LogErrorV("Expected initial value to be constant");
+      break;
+    }
+    }
+    V = Val->codegen();
+    if (!V)
+      return (Function *)LogErrorV("Expected initial value");
+  }
+
+  Var = new GlobalVariable(
+      *TheModule, llvmTypeFromCXType(Type), isConst, GlobalValue::CommonLinkage,
+      Constant::getNullValue(llvmTypeFromCXType(Type)), Name);
+  if (V)
+    Var->setInitializer((Constant *)V);
+  return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
 
 Value *SwitchStmtAST::codegen() {}
 
