@@ -4,6 +4,7 @@
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/Type.h>
 #include <llvm/IR/Value.h>
 #include <map>
 #include <memory>
@@ -15,6 +16,8 @@ using namespace llvm;
 // namespace {
 
 enum CXType { typ_err = 0, typ_int, typ_bool, typ_double };
+
+Type *llvmTypeFromCXType(const enum CXType T);
 
 class ExprAST {
   enum CXType ExprType;
@@ -127,9 +130,11 @@ class DeclAST {
 public:
   ~DeclAST() = default;
   virtual Function *codegen() = 0;
+  virtual bool isVarDecl() = 0;
 };
 
 class VarDeclAST : public BlockElemAST, public DeclAST {
+protected:
   bool isConst;
   enum CXType Type;
   std::string Name;
@@ -167,6 +172,7 @@ public:
   enum CXType getRetType() const { return RetTyp; }
   const std::vector<std::unique_ptr<VarDeclAST>> &getArgs() { return Args; }
   Function *codegen() override;
+  bool isVarDecl() override { return false; }
 };
 
 class FunctionAST : public DeclAST {
@@ -178,6 +184,7 @@ public:
               std::unique_ptr<BlockStmtAST> Body)
       : Proto(std::move(Proto)), Body(std::move(Body)) {}
   Function *codegen() override;
+  bool isVarDecl() override { return false; }
 };
 
 class IfStmtAST : public StmtAST {

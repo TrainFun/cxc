@@ -453,6 +453,7 @@ std::unique_ptr<StmtAST> ParseStatement() {
   default:
     return LogErrorS("unknown token when expecting a statement");
   case ';':
+    return LogErrorS("Unreachable!");
   case '!':
   case '(':
   case tok_increment:
@@ -636,7 +637,7 @@ std::unique_ptr<DeclAST> ParseTopLevelDeclaration() {
                                             std::move(Val));
   }
 
-  // Proto
+  // Function.
   if (isConst)
     return LogErrorD("Const functions are not supported");
 
@@ -674,11 +675,11 @@ std::unique_ptr<DeclAST> ParseTopLevelDeclaration() {
 
   getNextToken(); // eat ')'
 
-  auto Proto = std::make_unique<PrototypeAST>(Type, VarName, std::move(Params));
-  if (CurTok == ';')
-    return Proto;
+  if (CurTok != '{')
+    return LogErrorP("Expected function body");
 
-  // Def
+  auto Proto = std::make_unique<PrototypeAST>(Type, VarName, std::move(Params));
+
   if (auto Body = ParseBlockStmt()) {
     auto BlockBody = std::unique_ptr<BlockStmtAST>{
         static_cast<BlockStmtAST *>(Body.release())};
@@ -786,14 +787,27 @@ void InitializeModule() {
 
 void HandleTopLevelDeclaration() {
   if (auto DeclAST = ParseTopLevelDeclaration()) {
+    if (DeclAST->isVarDecl()) {
+      auto D = std::unique_ptr<GlobVarDeclAST>(
+          static_cast<GlobVarDeclAST *>(DeclAST.release())); // WHY?
+      D->codegen();
+      return;
+    }
+
+    // Function.
     if (auto DeclIR = DeclAST->codegen()) {
       DeclIR->print(errs());
       fprintf(stderr, "\n");
-
-      // DeclIR->eraseFromParent();
     }
-  } else {
+    return;
+  }
+
+  // Parsing fails.
+  while (true) {
+    auto LastTok = CurTok;
     getNextToken();
+    if (LastTok == ';' || LastTok == '}')
+      break;
   }
 }
 
@@ -803,7 +817,7 @@ void MainLoop() {
     switch (CurTok) {
     case tok_eof:
       return;
-    case '$':
+    case ';':
       getNextToken();
       break;
     default:
