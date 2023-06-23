@@ -149,6 +149,14 @@ public:
   enum CXType getType() { return Type; }
   const std::string &getName() const { return Name; }
   bool isVarDecl() override { return true; }
+
+  bool operator==(const VarDeclAST &other) const {
+    bool ret = true;
+    ret = ret && isConst == other.isConst;
+    ret = ret && Type == other.Type;
+    ret = ret && Name == other.Name;
+    return ret;
+  }
 };
 
 class GlobVarDeclAST : public VarDeclAST {
@@ -173,6 +181,20 @@ public:
   const std::vector<std::unique_ptr<VarDeclAST>> &getArgs() { return Args; }
   Function *codegen() override;
   bool isVarDecl() override { return false; }
+
+  bool operator==(const PrototypeAST &other) const {
+    bool ret = true;
+    ret = ret && RetTyp == other.RetTyp;
+    ret = ret && Name == other.Name;
+    ret = ret && Args.size() == other.Args.size();
+
+    if (ret) {
+      int ArgNum = Args.size();
+      for (int i = 0; i < ArgNum; ++i)
+        ret = ret && *Args[i] == *other.Args[i];
+    }
+    return ret;
+  }
 };
 
 class FunctionAST : public DeclAST {

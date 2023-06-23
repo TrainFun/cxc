@@ -135,6 +135,7 @@ std::unique_ptr<StmtAST> ParseIfStmt() {
 
   std::unique_ptr<StmtAST> Else = nullptr;
   if (CurTok == tok_else) {
+    getNextToken();
     Else = ParseStatement();
     if (!Else)
       return nullptr;
@@ -512,7 +513,9 @@ std::unique_ptr<ExprAST> ParsePrimary() {
 }
 
 std::unique_ptr<ExprAST> ParseUnary() {
-  if (!isascii(CurTok) || CurTok == '(')
+  if (CurTok == tok_identifier || CurTok == tok_intliteral ||
+      CurTok == tok_doubleliteral || CurTok == tok_true ||
+      CurTok == tok_false || CurTok == '(')
     return ParsePrimary();
 
   int Opc = CurTok;
@@ -796,6 +799,11 @@ void HandleTopLevelDeclaration() {
     if (auto DeclIR = DeclAST->codegen()) {
       DeclIR->print(errs());
       fprintf(stderr, "\n");
+
+      auto P = std::unique_ptr<PrototypeAST>(
+          dynamic_cast<PrototypeAST *>(DeclAST.release()));
+      if (P)
+        NamedFns[P->getName()] = std::move(P);
     }
     return;
   }

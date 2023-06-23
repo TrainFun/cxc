@@ -3,7 +3,11 @@
 #include "parser.h"
 #include <cstdio>
 
-int main() {
+int main(int argc, char **argv) {
+  if (argc == 2) {
+    freopen(argv[1], "r", stdin);
+  }
+
   BinopPrecedence['='] = 2;
   BinopPrecedence[tok_land] = 20;
   BinopPrecedence[tok_lor] = 20;
@@ -16,6 +20,8 @@ int main() {
   BinopPrecedence['+'] = 40;
   BinopPrecedence['-'] = 40;
   BinopPrecedence['*'] = 50;
+  BinopPrecedence['/'] = 50;
+  BinopPrecedence['%'] = 50;
 
   // fprintf(stderr, "ready> ");
   getNextToken();
@@ -25,4 +31,6 @@ int main() {
   MainLoop();
 
   TheModule->print(outs(), nullptr);
+
+  fclose(stdin);
 }
