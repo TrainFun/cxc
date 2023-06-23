@@ -24,8 +24,8 @@ void InitializeModule() {
 
   Builder->CreateGlobalString("%u\n", "outfmt_int", 0, TheModule.get());
   Builder->CreateGlobalString("%f\n", "outfmt_double", 0, TheModule.get());
-  Builder->CreateGlobalString("%u\n", "infmt_int", 0, TheModule.get());
-  Builder->CreateGlobalString("%f\n", "infmt_double", 0, TheModule.get());
+  Builder->CreateGlobalString("%u", "infmt_int", 0, TheModule.get());
+  Builder->CreateGlobalString("%f", "infmt_double", 0, TheModule.get());
 
   Function::Create(
       FunctionType::get(Builder->getInt32Ty(), Builder->getInt8PtrTy(), true),
@@ -60,7 +60,7 @@ Value *IntExprAST::codegen() {
 }
 
 Value *DoubleExprAST::codegen() {
-  setCXType(typ_int);
+  setCXType(typ_double);
   return ConstantFP::get(*TheContext, APFloat(Val));
 }
 
@@ -792,17 +792,17 @@ Value *ReadStmtAST::codegen() {
     if (G->isConstant())
       return LogErrorV("Can't assign to const variables");
 
-    auto CalleeF = TheModule->getFunction("printf");
+    auto CalleeF = TheModule->getFunction("scanf");
     Value *fmt = nullptr;
 
     if (G->getValueType() == Type::getInt32Ty(*TheContext)) {
-      fmt = TheModule->getNamedGlobal("outfmt_int");
+      fmt = TheModule->getNamedGlobal("infmt_int");
     }
     if (G->getValueType() == Type::getInt1Ty(*TheContext)) {
-      fmt = TheModule->getNamedGlobal("outfmt_int");
+      fmt = TheModule->getNamedGlobal("infmt_int");
     }
     if (G->getValueType() == Type::getDoubleTy(*TheContext)) {
-      fmt = TheModule->getNamedGlobal("outfmt_double");
+      fmt = TheModule->getNamedGlobal("infmt_double");
     }
 
     Value *Args[] = {fmt, G};
@@ -813,17 +813,17 @@ Value *ReadStmtAST::codegen() {
   if (NamedValues[Var->getName()].first)
     LogErrorV("Cannot read to a const variable");
 
-  auto CalleeF = TheModule->getFunction("printf");
+  auto CalleeF = TheModule->getFunction("scanf");
   Value *fmt = nullptr;
 
   if (A->getAllocatedType() == Type::getInt32Ty(*TheContext)) {
-    fmt = TheModule->getNamedGlobal("outfmt_int");
+    fmt = TheModule->getNamedGlobal("infmt_int");
   }
   if (A->getAllocatedType() == Type::getInt1Ty(*TheContext)) {
-    fmt = TheModule->getNamedGlobal("outfmt_int");
+    fmt = TheModule->getNamedGlobal("infmt_int");
   }
   if (A->getAllocatedType() == Type::getDoubleTy(*TheContext)) {
-    fmt = TheModule->getNamedGlobal("outfmt_double");
+    fmt = TheModule->getNamedGlobal("infmt_double");
   }
 
   Value *Args[] = {fmt, A};
