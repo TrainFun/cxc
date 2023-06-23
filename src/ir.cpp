@@ -102,14 +102,14 @@ Value *BinaryExprAST::codegen() {
     if (!LHSE)
       return LogErrorV("destination of '=' must be a variable");
 
-    if (NamedValues[LHSE->getName()].first)
-      return LogErrorV("Can't assign to const variables");
-
     AllocaInst *Variable = NamedValues[LHSE->getName()].second;
     if (!Variable) {
       auto *G = TheModule->getNamedGlobal(LHSE->getName());
       if (!G)
         return LogErrorV("Unknown variable name");
+
+      if (G->isConstant())
+        return LogErrorV("Can't assign to const variables");
 
       Value *Val = RHS->codegen();
       if (!Val)
@@ -125,6 +125,9 @@ Value *BinaryExprAST::codegen() {
       Builder->CreateStore(Val, G);
       return Val;
     }
+
+    if (NamedValues[LHSE->getName()].first)
+      return LogErrorV("Can't assign to const variables");
 
     Value *Val = RHS->codegen();
     if (!Val)
@@ -402,6 +405,10 @@ Function *PrototypeAST::codegen() {
 }
 
 Function *FunctionAST::codegen() {
+  auto Var = TheModule->getNamedGlobal(Proto->getName());
+  if (Var)
+    return (Function *)LogErrorV("Redefinition of identifier");
+
   Function *TheFunction = TheModule->getFunction(Proto->getName());
 
   if (!TheFunction)
@@ -717,6 +724,10 @@ Function *VarDeclAST::codegen() {
 Function *GlobVarDeclAST::codegen() {
   auto Var = TheModule->getNamedGlobal(Name);
   if (Var)
+    return (Function *)LogErrorV("Redefinition of identifier");
+
+  auto Fn = TheModule->getFunction(Name);
+  if (Fn)
     return (Function *)LogErrorV("Redefinition of identifier");
 
   Value *V = nullptr;
