@@ -3,7 +3,7 @@ decls ::= decl*
 decl ::= type ID declafter | "const" type ID vardeclafter
 declafter ::= vardeclafter | funcdeclafter
 vardeclafter ::= ( "=" expr )? ";"
-funcdeclafter ::= "(" ( ( "const" )? type ID ( "," ( "const" )? type ID )* )? ")" block
+funcdeclafter ::= "(" ( ( "const" )? type ID ( "," ( "const" )? type ID )* )? ")" ( block | ";" )
 vardecl ::= type ID vardeclafter
 block ::= "{" ( vardecl | stmt )* "}"
 stmt ::= ( expr )? ";" | ifstmt | switchstmt | whilestmt | dostmt | forstmt | untilstmt | readstmt | writestmt | block | "continue" ";" | "break" ";" | retstmt

@@ -637,7 +637,7 @@ std::unique_ptr<DeclAST> ParseTopLevelDeclaration() {
                                             std::move(Val));
   }
 
-  // Function.
+  // Prototype.
   if (isConst)
     return LogErrorD("Const functions are not supported");
 
@@ -674,6 +674,11 @@ std::unique_ptr<DeclAST> ParseTopLevelDeclaration() {
   }
 
   getNextToken(); // eat ')'
+
+  if (CurTok == ';') {
+    getNextToken();
+    return std::make_unique<PrototypeAST>(Type, VarName, std::move(Params));
+  }
 
   if (CurTok != '{')
     return LogErrorP("Expected function body");

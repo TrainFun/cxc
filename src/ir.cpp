@@ -362,6 +362,15 @@ AllocaInst *CreateEntryBlockAlloca(Function *TheFunction,
 }
 
 Function *PrototypeAST::codegen() {
+  auto Var = TheModule->getNamedGlobal(Name);
+  if (Var)
+    return (Function *)LogErrorV("Redeclaration of identifier");
+
+  Function *TheFunction = TheModule->getFunction(Name);
+
+  if (TheFunction)
+    return (Function *)LogErrorV("Redeclaration of identifier");
+
   std::vector<Type *> ArgsT;
   for (unsigned i = 0, e = Args.size(); i != e; ++i) {
     switch (Args[i]->getType()) {
