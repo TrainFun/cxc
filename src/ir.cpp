@@ -16,6 +16,25 @@ std::unique_ptr<Module> TheModule;
 std::unique_ptr<IRBuilder<>> Builder;
 std::map<std::string, std::pair<bool, AllocaInst *>> NamedValues;
 
+void InitializeModule() {
+  TheContext = std::make_unique<LLVMContext>();
+  TheModule = std::make_unique<Module>("CXC", *TheContext);
+
+  Builder = std::make_unique<IRBuilder<>>(*TheContext);
+
+  Builder->CreateGlobalString("%u\n", "outfmt_int", 0, TheModule.get());
+  Builder->CreateGlobalString("%f\n", "outfmt_double", 0, TheModule.get());
+  Builder->CreateGlobalString("%u\n", "infmt_int", 0, TheModule.get());
+  Builder->CreateGlobalString("%f\n", "infmt_double", 0, TheModule.get());
+
+  Function::Create(
+      FunctionType::get(Builder->getInt32Ty(), Builder->getInt8PtrTy(), true),
+      Function::ExternalLinkage, "printf", *TheModule);
+  Function::Create(
+      FunctionType::get(Builder->getInt32Ty(), Builder->getInt8PtrTy(), true),
+      Function::ExternalLinkage, "scanf", *TheModule);
+}
+
 Value *LogErrorV(const char *Str) {
   LogError(Str);
   return nullptr;
@@ -739,8 +758,83 @@ Value *SwitchStmtAST::codegen() {}
 Value *WhileStmtAST::codegen() {}
 Value *DoStmtAST::codegen() {}
 Value *UntilStmtAST::codegen() {}
-Value *ReadStmtAST::codegen() {}
-Value *WriteStmtAST::codegen() {}
+Value *ReadStmtAST::codegen() {
+  auto Var = dynamic_cast<VariableExprAST *>(this->Var.get());
+  if (!Var)
+    return LogErrorV("Can only read to a variable");
+
+  AllocaInst *A = NamedValues[Var->getName()].second;
+  if (!A) {
+    auto *G = TheModule->getNamedGlobal(Var->getName());
+    if (!G)
+      return LogErrorV("Unknown variable name");
+
+    if (G->isConstant())
+      return LogErrorV("Can't assign to const variables");
+
+    auto CalleeF = TheModule->getFunction("printf");
+    Value *fmt = nullptr;
+
+    if (G->getValueType() == Type::getInt32Ty(*TheContext)) {
+      fmt = TheModule->getNamedGlobal("outfmt_int");
+    }
+    if (G->getValueType() == Type::getInt1Ty(*TheContext)) {
+      fmt = TheModule->getNamedGlobal("outfmt_int");
+    }
+    if (G->getValueType() == Type::getDoubleTy(*TheContext)) {
+      fmt = TheModule->getNamedGlobal("outfmt_double");
+    }
+
+    Value *Args[] = {fmt, G};
+    Builder->CreateCall(CalleeF, Args, "calltmp");
+    return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
+  }
+
+  if (NamedValues[Var->getName()].first)
+    LogErrorV("Cannot read to a const variable");
+
+  auto CalleeF = TheModule->getFunction("printf");
+  Value *fmt = nullptr;
+
+  if (A->getAllocatedType() == Type::getInt32Ty(*TheContext)) {
+    fmt = TheModule->getNamedGlobal("outfmt_int");
+  }
+  if (A->getAllocatedType() == Type::getInt1Ty(*TheContext)) {
+    fmt = TheModule->getNamedGlobal("outfmt_int");
+  }
+  if (A->getAllocatedType() == Type::getDoubleTy(*TheContext)) {
+    fmt = TheModule->getNamedGlobal("outfmt_double");
+  }
+
+  Value *Args[] = {fmt, A};
+  Builder->CreateCall(CalleeF, Args, "calltmp");
+  return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
+
+Value *WriteStmtAST::codegen() {
+  auto *V = Val->codegen();
+  if (!V)
+    return nullptr;
+
+  auto CalleeF = TheModule->getFunction("printf");
+  Value *fmt = nullptr;
+
+  switch (Val->getCXType()) {
+  case typ_err:
+    return LogErrorV("Unreachable!");
+  case typ_int:
+  case typ_bool:
+    fmt = TheModule->getNamedGlobal("outfmt_int");
+    break;
+  case typ_double:
+    fmt = TheModule->getNamedGlobal("outfmt_double");
+    break;
+  }
+
+  Value *Args[] = {fmt, V};
+  Builder->CreateCall(CalleeF, Args, "calltmp");
+  return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
 Value *ContStmtAST::codegen() {}
 Value *BrkStmtAST::codegen() {}
 Value *RetStmtAST::codegen() {}

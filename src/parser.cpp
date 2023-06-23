@@ -752,13 +752,6 @@ std::unique_ptr<DeclAST> ParseTopLevelDeclaration() {
 //   return nullptr;
 // }
 
-void InitializeModule() {
-  TheContext = std::make_unique<LLVMContext>();
-  TheModule = std::make_unique<Module>("CXC", *TheContext);
-
-  Builder = std::make_unique<IRBuilder<>>(*TheContext);
-}
-
 // void HandleDefinition() {
 //   if (auto FnAST = ParseDefinition()) {
 //     if (auto *FnIR = FnAST->codegen()) {
