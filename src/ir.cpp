@@ -15,6 +15,7 @@ std::unique_ptr<LLVMContext> TheContext;
 std::unique_ptr<Module> TheModule;
 std::unique_ptr<IRBuilder<>> Builder;
 std::map<std::string, std::pair<bool, AllocaInst *>> NamedValues;
+std::map<std::string, std::unique_ptr<PrototypeAST>> NamedFns;
 
 void InitializeModule() {
   TheContext = std::make_unique<LLVMContext>();
@@ -200,11 +201,11 @@ Value *BinaryExprAST::codegen() {
     default:
       return LogErrorV("Unreachable!");
     case typ_int:
-      return Builder->CreateUDiv(L, R, "multmp");
+      return Builder->CreateUDiv(L, R, "divtmp");
     case typ_bool:
       return LogErrorV("operator '/' not defined for bool");
     case typ_double:
-      return Builder->CreateFDiv(L, R, "multmp");
+      return Builder->CreateFDiv(L, R, "divtmp");
     }
   case '%':
     setCXType(LHS->getCXType());
@@ -212,7 +213,7 @@ Value *BinaryExprAST::codegen() {
     default:
       return LogErrorV("Unreachable!");
     case typ_int:
-      return Builder->CreateURem(L, R, "multmp");
+      return Builder->CreateURem(L, R, "modtmp");
     case typ_bool:
       return LogErrorV("operator '%' not defined for bool");
     case typ_double:
@@ -420,8 +421,11 @@ Function *FunctionAST::codegen() {
 
   Function *TheFunction = TheModule->getFunction(Proto->getName());
 
-  if (!TheFunction)
+  if (!TheFunction) {
     TheFunction = Proto->codegen();
+  } else if (!(*Proto == *NamedFns[Proto->getName()])) {
+    return (Function *)LogErrorV("Function has conflicting signatures");
+  }
 
   if (!TheFunction)
     return nullptr;
@@ -481,6 +485,8 @@ Function *FunctionAST::codegen() {
     }
 
     verifyFunction(*TheFunction);
+
+    NamedFns[Proto->getName()] = std::move(Proto);
 
     return TheFunction;
   }
@@ -765,9 +771,10 @@ Function *GlobVarDeclAST::codegen() {
       return (Function *)LogErrorV("Expected initial value");
   }
 
-  Var = new GlobalVariable(
-      *TheModule, llvmTypeFromCXType(Type), isConst, GlobalValue::CommonLinkage,
-      Constant::getNullValue(llvmTypeFromCXType(Type)), Name);
+  Var = new GlobalVariable(*TheModule, llvmTypeFromCXType(Type), isConst,
+                           GlobalValue::ExternalLinkage,
+                           Constant::getNullValue(llvmTypeFromCXType(Type)),
+                           Name);
   if (V)
     Var->setInitializer((Constant *)V);
   return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
@@ -857,4 +864,17 @@ Value *WriteStmtAST::codegen() {
 }
 Value *ContStmtAST::codegen() {}
 Value *BrkStmtAST::codegen() {}
-Value *RetStmtAST::codegen() {}
+
+Value *RetStmtAST::codegen() {
+  auto TheFunction = Builder->GetInsertBlock()->getParent();
+
+  auto V = Val->codegen();
+  if (!V)
+    return nullptr;
+
+  if (TheFunction->getReturnType() != V->getType())
+    return LogErrorV("Incompatable return type");
+
+  Builder->CreateRet(V);
+  return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
