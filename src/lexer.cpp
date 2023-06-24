@@ -6,14 +6,18 @@
 
 std::string IdentifierStr;
 double NumVal;
+unsigned NR = 1;
 
 /// gettok - Return the next token from standard input.
 int gettok() {
   static int LastChar = ' ';
 
   // Skip whitespaces.
-  while (isspace(LastChar))
+  while (isspace(LastChar)) {
+    if (LastChar == '\n')
+      ++NR;
     LastChar = getchar();
+  }
 
   // Identifiers.
   if (isalpha(LastChar)) {
