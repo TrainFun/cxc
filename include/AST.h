@@ -224,13 +224,13 @@ public:
 class ForStmtAST : public StmtAST {
   enum CXType VarType;
   std::string VarName;
-  std::unique_ptr<ExprAST> Start, End;
-  std::unique_ptr<StmtAST> Step, Body;
+  std::unique_ptr<ExprAST> Start, End, Step;
+  std::unique_ptr<StmtAST> Body;
 
 public:
   ForStmtAST(const enum CXType VarType, const std::string &VarName,
              std::unique_ptr<ExprAST> Start, std::unique_ptr<ExprAST> End,
-             std::unique_ptr<StmtAST> Step, std::unique_ptr<StmtAST> Body)
+             std::unique_ptr<ExprAST> Step, std::unique_ptr<StmtAST> Body)
       : VarType(VarType), VarName(VarName), Start(std::move(Start)),
         End(std::move(End)), Step(std::move(Step)), Body(std::move(Body)) {}
 
