@@ -665,43 +665,84 @@ Value *UnaryExprAST::codegen() {
   }
 
   case tok_increment: {
-    switch (Operand->getCXType()) {
+    auto OpVar = std::unique_ptr<VariableExprAST>(
+        dynamic_cast<VariableExprAST *>(Operand.release()));
+    if (!OpVar)
+      return LogErrorV("Operand of '++' must be a variable");
+
+    Value *Dest = NamedValues[OpVar->getName()].second;
+    if (!Dest) {
+      auto G = TheModule->getNamedGlobal(OpVar->getName());
+      if (!G)
+        return LogErrorV("Unknown variable");
+      Dest = G;
+    }
+
+    switch (OpVar->getCXType()) {
     default:
       return LogErrorV("Unreachable!");
     case typ_bool:
       return LogErrorV("operator ++ is not defined for bool");
-    case typ_int:
+    case typ_int: {
       setCXType(typ_int);
-      return Builder->CreateAdd(
+      auto AddTmp = Builder->CreateAdd(
           V, Constant::getIntegerValue(Type::getInt32Ty(*TheContext),
                                        APInt(32, 1)));
-    case typ_double:
+      Builder->CreateStore(AddTmp, Dest);
+      return AddTmp;
+    }
+
+    case typ_double: {
       setCXType(typ_double);
-      return Builder->CreateFAdd(V, ConstantFP::get(*TheContext, APFloat(1.0)));
+      auto AddTmp =
+          Builder->CreateFAdd(V, ConstantFP::get(*TheContext, APFloat(1.0)));
+      Builder->CreateStore(AddTmp, Dest);
+      return AddTmp;
+    }
     }
   }
 
   case tok_decrement: {
-    switch (Operand->getCXType()) {
+    auto OpVar = std::unique_ptr<VariableExprAST>(
+        dynamic_cast<VariableExprAST *>(Operand.release()));
+    if (!OpVar)
+      return LogErrorV("Operand of '++' must be a variable");
+
+    Value *Dest = NamedValues[OpVar->getName()].second;
+    if (!Dest) {
+      auto G = TheModule->getNamedGlobal(OpVar->getName());
+      if (!G)
+        return LogErrorV("Unknown variable");
+      Dest = G;
+    }
+
+    switch (OpVar->getCXType()) {
     default:
       return LogErrorV("Unreachable!");
     case typ_bool:
       return LogErrorV("operator -- is not defined for bool");
-    case typ_int:
+    case typ_int: {
       setCXType(typ_int);
-      return Builder->CreateSub(
+      auto SubTmp = Builder->CreateSub(
           V, Constant::getIntegerValue(Type::getInt32Ty(*TheContext),
                                        APInt(32, 1)));
-    case typ_double:
+      Builder->CreateStore(SubTmp, Dest);
+      return SubTmp;
+    }
+    case typ_double: {
       setCXType(typ_double);
-      return Builder->CreateFSub(V, ConstantFP::get(*TheContext, APFloat(1.0)));
+      auto SubTmp =
+          Builder->CreateFSub(V, ConstantFP::get(*TheContext, APFloat(1.0)));
+      Builder->CreateStore(SubTmp, Dest);
+      return SubTmp;
+    }
     }
   }
   }
 }
 
 Value *ExprStmtAST::codegen() {
-  if (!Expr->codegen())
+  if (Expr && !Expr->codegen())
     return nullptr;
   return Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
