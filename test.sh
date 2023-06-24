@@ -33,7 +33,7 @@ while [[ -e $code ]]; do
 		lli /tmp/cxcode > /tmp/cxout
 	fi
 	printf "\033[0m"
-	diff -y --color=always /tmp/cxout "test/$1_$i.out"
+	diff -y --suppress-common-lines --color=always /tmp/cxout "test/$1_$i.out"
 
 	i=$((i+1))
 	code="test/$1_$i.c"
