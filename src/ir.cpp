@@ -831,6 +831,7 @@ Function *GlobVarDeclAST::codegen() {
 Value *SwitchStmtAST::codegen() {}
 
 Value *WhileStmtAST::codegen() {}
+
 Value *DoStmtAST::codegen() {}
 Value *UntilStmtAST::codegen() {}
 Value *ReadStmtAST::codegen() {
