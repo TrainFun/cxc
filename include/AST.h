@@ -239,13 +239,13 @@ public:
 
 class SwitchStmtAST : public StmtAST {
   std::unique_ptr<ExprAST> Expr;
-  std::vector<std::pair<std::unique_ptr<ExprAST>,
+  std::vector<std::pair<std::vector<std::unique_ptr<ExprAST>>,
                         std::vector<std::unique_ptr<StmtAST>>>>
       BasicBlocks;
 
 public:
   SwitchStmtAST(std::unique_ptr<ExprAST> Expr,
-                std::vector<std::pair<std::unique_ptr<ExprAST>,
+                std::vector<std::pair<std::vector<std::unique_ptr<ExprAST>>,
                                       std::vector<std::unique_ptr<StmtAST>>>>
                     BasicBlocks)
       : Expr(std::move(Expr)), BasicBlocks(std::move(BasicBlocks)) {}

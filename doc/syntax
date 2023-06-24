@@ -6,7 +6,7 @@ vardeclafter ::= ( "=" expr )? ";"
 funcdeclafter ::= "(" ( ( "const" )? type ID ( "," ( "const" )? type ID )* )? ")" ( block | ";" )
 vardecl ::= type ID vardeclafter
 block ::= "{" ( vardecl | stmt )* "}"
-stmt ::= ( expr )? ";" | ifstmt | switchstmt | whilestmt | dostmt | forstmt | untilstmt | readstmt | writestmt | block | "continue" ";" | "break" ";" | retstmt
+stmt ::= ( expr )? ";" | ifstmt | switchstmt | whilestmt | dostmt | forstmt | untilstmt | readstmt | writestmt | block | "continue" ";" | "break" ";" | "exit" ";" | retstmt
 ifstmt ::= "if" "(" expr ")" stmt ( "else" stmt )?
 switchstmt ::= "switch" "(" expr ")" "{" caselist ( "default" ":" ( stmt )* caselist )? "}"
 caselist ::= ( "case" expr ":" ( stmt )* )*

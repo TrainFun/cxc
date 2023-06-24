@@ -828,7 +828,84 @@ Function *GlobVarDeclAST::codegen() {
   return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
 
-Value *SwitchStmtAST::codegen() {}
+Value *SwitchStmtAST::codegen() {
+  Function *TheFunction = Builder->GetInsertBlock()->getParent();
+
+  auto *V = Expr->codegen();
+  if (!V)
+    return nullptr;
+
+  auto ExprType = Expr->getCXType();
+  if (ExprType == typ_double)
+    return LogErrorV("Expected integer types in switch");
+
+  auto CondBB = BasicBlock::Create(*TheContext, "cond", TheFunction);
+  auto HandleBB = BasicBlock::Create(*TheContext, "handle");
+  auto AfterBB = BasicBlock::Create(*TheContext, "afterswitch", TheFunction);
+  Builder->CreateBr(CondBB);
+
+  BasicBlock *DefaultBB = nullptr;
+  for (auto &Item : BasicBlocks) {
+    auto &CondList = Item.first;
+    auto &Handle = Item.second;
+
+    for (auto &Cond : CondList) {
+      if (!Cond) { // the "default" case
+        DefaultBB = HandleBB;
+        continue;
+      }
+
+      TheFunction->insert(TheFunction->end(), CondBB);
+      Builder->SetInsertPoint(CondBB);
+
+      auto CondV = Cond->codegen();
+      if (!CondV)
+        return nullptr;
+
+      if (Cond->getCXType() != ExprType)
+        return LogErrorV("Expected same type in switch-case");
+
+      switch (ExprType) {
+      case typ_err:
+      case typ_double:
+        return LogErrorV("Unreachable!");
+      case typ_int:
+      case typ_bool:
+        CondV = Builder->CreateICmpEQ(V, CondV);
+      }
+
+      CondBB = BasicBlock::Create(*TheContext, "cond");
+      Builder->CreateCondBr(CondV, HandleBB, CondBB);
+    }
+
+    TheFunction->insert(TheFunction->end(), HandleBB);
+    Builder->SetInsertPoint(HandleBB);
+    for (auto &Stmt : Handle) {
+      auto *S = Stmt->codegen();
+      if (!S)
+        return nullptr;
+    }
+    HandleBB = BasicBlock::Create(*TheContext, "handle");
+    Builder->CreateBr(HandleBB);
+  }
+
+  TheFunction->insert(TheFunction->end(), CondBB);
+  Builder->SetInsertPoint(CondBB);
+
+  if (DefaultBB)
+    Builder->CreateBr(DefaultBB);
+  else
+    Builder->CreateBr(AfterBB);
+
+  TheFunction->insert(TheFunction->end(), HandleBB);
+  Builder->SetInsertPoint(HandleBB);
+  Builder->CreateBr(AfterBB);
+
+  TheFunction->insert(TheFunction->end(), AfterBB);
+  Builder->SetInsertPoint(AfterBB);
+
+  return Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
 
 Value *WhileStmtAST::codegen() {}
 
