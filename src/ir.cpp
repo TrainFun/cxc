@@ -564,25 +564,29 @@ Value *IfStmtAST::codegen() {
 Value *ForStmtAST::codegen() {
   Function *TheFunction = Builder->GetInsertBlock()->getParent();
 
-  AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarType, VarName);
-
-  Value *StartVal = nullptr;
   bool OldIsConst;
-  AllocaInst *OldAlloca;
+  AllocaInst *OldAlloca = nullptr;
 
-  if (Start) {
-    StartVal = Start->codegen();
-    if (!StartVal)
-      return nullptr;
-    if (Start->getCXType() != VarType)
-      return LogErrorV("The loop variable was assigned a value of other type");
+  if (VarType != typ_err) {
+    AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, VarType, VarName);
 
-    Builder->CreateStore(StartVal, Alloca);
+    Value *StartVal = nullptr;
 
-    OldIsConst = NamedValues[VarName].first;
-    OldAlloca = NamedValues[VarName].second;
-    NamedValues[VarName].first = false;
-    NamedValues[VarName].second = Alloca;
+    if (Start) {
+      StartVal = Start->codegen();
+      if (!StartVal)
+        return nullptr;
+      if (Start->getCXType() != VarType)
+        return LogErrorV(
+            "The loop variable was assigned a value of other type");
+
+      Builder->CreateStore(StartVal, Alloca);
+
+      OldIsConst = NamedValues[VarName].first;
+      OldAlloca = NamedValues[VarName].second;
+      NamedValues[VarName].first = false;
+      NamedValues[VarName].second = Alloca;
+    }
   }
 
   BasicBlock *CondBB = BasicBlock::Create(*TheContext, "cond", TheFunction);

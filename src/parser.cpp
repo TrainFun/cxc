@@ -302,9 +302,9 @@ std::unique_ptr<StmtAST> ParseForStmt() {
   }
   getNextToken(); // eat ';'
 
-  std::unique_ptr<StmtAST> Step = nullptr;
+  std::unique_ptr<ExprAST> Step = nullptr;
   if (CurTok != ')') {
-    Step = ParseStatement();
+    Step = ParseExpression();
     if (!Step)
       return nullptr;
   }
