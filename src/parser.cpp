@@ -454,7 +454,6 @@ std::unique_ptr<StmtAST> ParseStatement() {
   default:
     return LogErrorS("unknown token when expecting a statement");
   case ';':
-    return LogErrorS("Unreachable!");
   case '!':
   case '(':
   case tok_increment:
