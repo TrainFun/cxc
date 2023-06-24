@@ -17,6 +17,8 @@ std::unique_ptr<IRBuilder<>> Builder;
 std::map<std::string, std::pair<bool, AllocaInst *>> NamedValues;
 std::map<std::string, std::unique_ptr<PrototypeAST>> NamedFns;
 std::set<std::string> TakenNames;
+BasicBlock *ContDest = nullptr;
+BasicBlock *BrkDest = nullptr;
 
 void InitializeModule() {
   TheContext = std::make_unique<LLVMContext>();
@@ -606,7 +608,13 @@ Value *ForStmtAST::codegen() {
         Constant::getIntegerValue(Type::getInt1Ty(*TheContext), APInt(1, 1));
 
   BasicBlock *LoopBB = BasicBlock::Create(*TheContext, "loop", TheFunction);
+  BasicBlock *StepBB = BasicBlock::Create(*TheContext, "step");
   BasicBlock *AfterBB = BasicBlock::Create(*TheContext, "afterloop");
+
+  auto OldContDest = ContDest;
+  auto OldBrkDest = BrkDest;
+  ContDest = StepBB;
+  BrkDest = AfterBB;
 
   Builder->CreateCondBr(EndCond, LoopBB, AfterBB);
   Builder->SetInsertPoint(LoopBB);
@@ -614,8 +622,9 @@ Value *ForStmtAST::codegen() {
   if (!Body->codegen())
     return nullptr;
 
-  BasicBlock *StepBB = BasicBlock::Create(*TheContext, "step", TheFunction);
   Builder->CreateBr(StepBB);
+
+  TheFunction->insert(TheFunction->end(), StepBB);
   Builder->SetInsertPoint(StepBB);
 
   if (Step) {
@@ -632,6 +641,9 @@ Value *ForStmtAST::codegen() {
     NamedValues[VarName] = std::make_pair(OldIsConst, OldAlloca);
   else
     NamedValues.erase(VarName);
+
+  ContDest = OldContDest;
+  BrkDest = OldBrkDest;
 
   return Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
@@ -650,7 +662,7 @@ Value *UnaryExprAST::codegen() {
     if (Operand->getCXType() != typ_bool)
       return LogErrorV("Expected boolean expression after '!'");
     setCXType(typ_bool);
-    return Builder->CreateNot(V);
+    return Builder->CreateNot(V, "nottmp");
   }
 
   case tok_ODD: {
@@ -659,10 +671,12 @@ Value *UnaryExprAST::codegen() {
     setCXType(typ_bool);
     auto AndTmp = Builder->CreateAnd(
         V,
-        Constant::getIntegerValue(Type::getInt32Ty(*TheContext), APInt(32, 1)));
+        Constant::getIntegerValue(Type::getInt32Ty(*TheContext), APInt(32, 1)),
+        "andtmp");
     return Builder->CreateICmpEQ(
         AndTmp,
-        Constant::getIntegerValue(Type::getInt32Ty(*TheContext), APInt(32, 1)));
+        Constant::getIntegerValue(Type::getInt32Ty(*TheContext), APInt(32, 1)),
+        "andtmp");
   }
 
   case tok_increment: {
@@ -686,17 +700,19 @@ Value *UnaryExprAST::codegen() {
       return LogErrorV("operator ++ is not defined for bool");
     case typ_int: {
       setCXType(typ_int);
-      auto AddTmp = Builder->CreateAdd(
-          V, Constant::getIntegerValue(Type::getInt32Ty(*TheContext),
-                                       APInt(32, 1)));
+      auto AddTmp =
+          Builder->CreateAdd(V,
+                             Constant::getIntegerValue(
+                                 Type::getInt32Ty(*TheContext), APInt(32, 1)),
+                             "addtmp");
       Builder->CreateStore(AddTmp, Dest);
       return AddTmp;
     }
 
     case typ_double: {
       setCXType(typ_double);
-      auto AddTmp =
-          Builder->CreateFAdd(V, ConstantFP::get(*TheContext, APFloat(1.0)));
+      auto AddTmp = Builder->CreateFAdd(
+          V, ConstantFP::get(*TheContext, APFloat(1.0)), "addtmp");
       Builder->CreateStore(AddTmp, Dest);
       return AddTmp;
     }
@@ -724,16 +740,18 @@ Value *UnaryExprAST::codegen() {
       return LogErrorV("operator -- is not defined for bool");
     case typ_int: {
       setCXType(typ_int);
-      auto SubTmp = Builder->CreateSub(
-          V, Constant::getIntegerValue(Type::getInt32Ty(*TheContext),
-                                       APInt(32, 1)));
+      auto SubTmp =
+          Builder->CreateSub(V,
+                             Constant::getIntegerValue(
+                                 Type::getInt32Ty(*TheContext), APInt(32, 1)),
+                             "subtmp");
       Builder->CreateStore(SubTmp, Dest);
       return SubTmp;
     }
     case typ_double: {
       setCXType(typ_double);
-      auto SubTmp =
-          Builder->CreateFSub(V, ConstantFP::get(*TheContext, APFloat(1.0)));
+      auto SubTmp = Builder->CreateFSub(
+          V, ConstantFP::get(*TheContext, APFloat(1.0)), "subtmp");
       Builder->CreateStore(SubTmp, Dest);
       return SubTmp;
     }
@@ -852,6 +870,9 @@ Value *SwitchStmtAST::codegen() {
   auto AfterBB = BasicBlock::Create(*TheContext, "afterswitch", TheFunction);
   Builder->CreateBr(CondBB);
 
+  auto OldBrkDest = BrkDest;
+  BrkDest = AfterBB;
+
   BasicBlock *DefaultBB = nullptr;
   for (auto &Item : BasicBlocks) {
     auto &CondList = Item.first;
@@ -879,7 +900,7 @@ Value *SwitchStmtAST::codegen() {
         return LogErrorV("Unreachable!");
       case typ_int:
       case typ_bool:
-        CondV = Builder->CreateICmpEQ(V, CondV);
+        CondV = Builder->CreateICmpEQ(V, CondV, "cmptmp");
       }
 
       CondBB = BasicBlock::Create(*TheContext, "cond");
@@ -912,13 +933,123 @@ Value *SwitchStmtAST::codegen() {
   TheFunction->insert(TheFunction->end(), AfterBB);
   Builder->SetInsertPoint(AfterBB);
 
+  BrkDest = OldBrkDest;
+
   return Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
 
-Value *WhileStmtAST::codegen() {}
+Value *WhileStmtAST::codegen() {
+  auto TheFunction = Builder->GetInsertBlock()->getParent();
 
-Value *DoStmtAST::codegen() {}
-Value *UntilStmtAST::codegen() {}
+  auto CondBB = BasicBlock::Create(*TheContext, "cond", TheFunction);
+  Builder->CreateBr(CondBB);
+  Builder->SetInsertPoint(CondBB);
+
+  auto CondV = Cond->codegen();
+  if (!CondV)
+    return nullptr;
+
+  auto LoopBB = BasicBlock::Create(*TheContext, "loop", TheFunction);
+  auto AfterBB = BasicBlock::Create(*TheContext, "afterloop");
+  Builder->CreateCondBr(CondV, LoopBB, AfterBB);
+  Builder->SetInsertPoint(LoopBB);
+
+  auto OldContDest = ContDest;
+  auto OldBrkDest = BrkDest;
+  ContDest = CondBB;
+  BrkDest = AfterBB;
+
+  if (!Body->codegen())
+    return nullptr;
+
+  Builder->CreateBr(CondBB);
+
+  TheFunction->insert(TheFunction->end(), AfterBB);
+  Builder->SetInsertPoint(AfterBB);
+
+  ContDest = OldContDest;
+  BrkDest = OldBrkDest;
+
+  return Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
+
+Value *DoStmtAST::codegen() {
+  auto TheFunction = Builder->GetInsertBlock()->getParent();
+
+  auto LoopBB = BasicBlock::Create(*TheContext, "loop", TheFunction);
+  Builder->CreateBr(LoopBB);
+  Builder->SetInsertPoint(LoopBB);
+
+  auto CondBB = BasicBlock::Create(*TheContext, "cond");
+  auto AfterBB = BasicBlock::Create(*TheContext, "afterloop");
+
+  auto OldContDest = ContDest;
+  auto OldBrkDest = BrkDest;
+  ContDest = CondBB;
+  BrkDest = AfterBB;
+
+  if (!Body->codegen())
+    return nullptr;
+
+  Builder->CreateBr(CondBB);
+
+  TheFunction->insert(TheFunction->end(), CondBB);
+  Builder->SetInsertPoint(CondBB);
+
+  auto CondV = Cond->codegen();
+  if (!CondV)
+    return nullptr;
+
+  Builder->CreateCondBr(CondV, LoopBB, AfterBB);
+
+  TheFunction->insert(TheFunction->end(), CondBB);
+  Builder->SetInsertPoint(AfterBB);
+
+  ContDest = OldContDest;
+  BrkDest = OldBrkDest;
+
+  return Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
+
+Value *UntilStmtAST::codegen() {
+  auto TheFunction = Builder->GetInsertBlock()->getParent();
+
+  auto LoopBB = BasicBlock::Create(*TheContext, "loop", TheFunction);
+  Builder->CreateBr(LoopBB);
+  Builder->SetInsertPoint(LoopBB);
+
+  auto CondBB = BasicBlock::Create(*TheContext, "cond");
+  auto AfterBB = BasicBlock::Create(*TheContext, "afterloop");
+
+  auto OldContDest = ContDest;
+  auto OldBrkDest = BrkDest;
+  ContDest = CondBB;
+  BrkDest = AfterBB;
+
+  if (!Body->codegen())
+    return nullptr;
+
+  Builder->CreateBr(CondBB);
+
+  TheFunction->insert(TheFunction->end(), CondBB);
+  Builder->SetInsertPoint(CondBB);
+
+  auto CondV = Cond->codegen();
+  if (!CondV)
+    return nullptr;
+  CondV = Builder->CreateNot(CondV, "nottmp");
+
+  Builder->CreateCondBr(CondV, LoopBB, AfterBB);
+
+  TheFunction->insert(TheFunction->end(), CondBB);
+  Builder->SetInsertPoint(AfterBB);
+
+  ContDest = OldContDest;
+  BrkDest = OldBrkDest;
+
+  return Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
+
 Value *ReadStmtAST::codegen() {
   auto Var = dynamic_cast<VariableExprAST *>(this->Var.get());
   if (!Var)
@@ -996,8 +1127,16 @@ Value *WriteStmtAST::codegen() {
   Builder->CreateCall(CalleeF, Args, "calltmp");
   return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
-Value *ContStmtAST::codegen() {}
-Value *BrkStmtAST::codegen() {}
+
+Value *ContStmtAST::codegen() {
+  Builder->CreateBr(ContDest);
+  return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
+
+Value *BrkStmtAST::codegen() {
+  Builder->CreateBr(BrkDest);
+  return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
+}
 
 Value *RetStmtAST::codegen() {
   auto TheFunction = Builder->GetInsertBlock()->getParent();
