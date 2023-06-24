@@ -77,12 +77,15 @@ int gettok() {
   }
 
   // Numbers.
-  if (isdigit(LastChar)) {
+  if (isdigit(LastChar) || LastChar == '.') {
     bool isDouble = false;
     std::string NumStr;
     do {
-      if (LastChar == '.')
+      if (LastChar == '.') {
+        if (isDouble)
+          return tok_doubleliteral;
         isDouble = true;
+      }
       NumStr += LastChar;
       LastChar = getchar();
     } while (isdigit(LastChar) || LastChar == '.');
