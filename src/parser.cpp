@@ -402,8 +402,8 @@ std::unique_ptr<StmtAST> ParseBlockStmt() {
     }
   }
 
-  if (CurTok != '}')
-    return LogErrorS("Expect '}' after block");
+  // if (CurTok != '}')
+  //   return LogErrorS("Expect '}' after block");
   getNextToken();
 
   return std::make_unique<BlockStmtAST>(std::move(Elems));
