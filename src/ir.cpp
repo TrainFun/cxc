@@ -797,17 +797,20 @@ Function *GlobVarDeclAST::codegen() {
       return (Function *)LogErrorV("Unreachable!");
     case typ_int: {
       if (!dynamic_cast<IntExprAST *>(Val.get()))
-        return (Function *)LogErrorV("Expected initial value to be constant");
+        return (Function *)LogErrorV(
+            "Expected initial value to be int constant");
       break;
     }
     case typ_bool: {
       if (!dynamic_cast<BooleanExprAST *>(Val.get()))
-        return (Function *)LogErrorV("Expected initial value to be constant");
+        return (Function *)LogErrorV(
+            "Expected initial value to be bool constant");
       break;
     }
     case typ_double: {
       if (!dynamic_cast<DoubleExprAST *>(Val.get()))
-        return (Function *)LogErrorV("Expected initial value to be constant");
+        return (Function *)LogErrorV(
+            "Expected initial value to be double constant");
       break;
     }
     }
