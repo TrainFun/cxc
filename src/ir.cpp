@@ -1151,3 +1151,82 @@ Value *RetStmtAST::codegen() {
   Builder->CreateRet(V);
   return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
+
+Value *CastExprAST::codegen() {
+  auto FromV = From->codegen();
+  if (!FromV)
+    return nullptr;
+
+  Value *V = nullptr;
+
+  switch (Type) {
+  case typ_err:
+    return LogErrorV("Unreachable!");
+
+  case typ_int: {
+    switch (From->getCXType()) {
+    case typ_err:
+      return LogErrorV("Unreachable!");
+    case typ_int: {
+      V = FromV;
+      break;
+    }
+    case typ_bool: {
+      V = Builder->CreateIntCast(FromV, Type::getInt32Ty(*TheContext), false,
+                                 "casttmp");
+      break;
+    }
+    case typ_double: {
+    }
+      V = Builder->CreateFPToUI(FromV, Type::getInt32Ty(*TheContext),
+                                "casttmp");
+      break;
+    }
+    break;
+  }
+
+  case typ_bool: {
+    switch (From->getCXType()) {
+    case typ_err:
+      return LogErrorV("Unreachable!");
+    case typ_int: {
+      V = Builder->CreateIsNotNull(FromV, "notnulltmp");
+      break;
+    }
+    case typ_double: {
+      V = Builder->CreateFCmpONE(
+          FromV, ConstantFP::getNullValue(Type::getDoubleTy(*TheContext)),
+          "cmptmp");
+      break;
+    }
+    case typ_bool: {
+      V = FromV;
+      break;
+    }
+    }
+    break;
+  }
+
+  case typ_double: {
+    switch (From->getCXType()) {
+    case typ_err:
+      return LogErrorV("Unreachable!");
+    case typ_bool:
+    case typ_int: {
+
+      V = Builder->CreateUIToFP(FromV, Type::getDoubleTy(*TheContext),
+                                "casttmp");
+      break;
+    }
+    case typ_double: {
+      V = FromV;
+      break;
+    }
+    }
+  } break;
+  }
+
+  if (V)
+    setCXType(Type);
+  return V;
+}

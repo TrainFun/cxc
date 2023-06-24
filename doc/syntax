@@ -21,7 +21,7 @@ expr ::= binexpr
 binexpr ::= uniexpr RHS
 RHS ::= ( binOP expr )?
 uniexpr ::= primexpr | uniOP uniexpr
-primexpr ::= NUM | BOOLEAN | ID ( "(" ( expr ( "," expr )* )? ")" )? | parenexpr
+primexpr ::= NUM | BOOLEAN | ID ( "(" ( expr ( "," expr )* )? ")" )? | parenexpr | "cast" "<" type ">" parenexpr
 parenexpr ::= "(" expr ")"
 
 BOOLEAN ::= "true" | "false"

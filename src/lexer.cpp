@@ -27,6 +27,8 @@ int gettok() {
 
     // if (IdentifierStr == "def")
     //   return tok_def;
+    if (IdentifierStr == "cast")
+      return tok_cast;
     if (IdentifierStr == "true")
       return tok_true;
     if (IdentifierStr == "false")
