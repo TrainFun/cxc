@@ -16,6 +16,7 @@ std::unique_ptr<Module> TheModule;
 std::unique_ptr<IRBuilder<>> Builder;
 std::map<std::string, std::pair<bool, AllocaInst *>> NamedValues;
 std::map<std::string, std::unique_ptr<PrototypeAST>> NamedFns;
+std::set<std::string> TakenNames;
 
 void InitializeModule() {
   TheContext = std::make_unique<LLVMContext>();
@@ -750,6 +751,8 @@ Value *ExprStmtAST::codegen() {
 Value *BlockStmtAST::codegen() {
   // Backup.
   auto OldNamedValues = NamedValues;
+  auto OldTakenNames = TakenNames;
+  TakenNames.clear();
 
   for (auto &Elem : Elems) {
     auto VarDecl = dynamic_cast<VarDeclAST *>(Elem.get());
@@ -762,11 +765,15 @@ Value *BlockStmtAST::codegen() {
   }
 
   // Recover.
+  TakenNames = OldTakenNames;
   NamedValues = OldNamedValues;
   return Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
 
 Function *VarDeclAST::codegen() {
+  if (TakenNames.find(Name) != TakenNames.end())
+    return (Function *)LogErrorV("The name has been taken in the same scope");
+
   auto TheFunction = Builder->GetInsertBlock()->getParent();
   auto Alloca = CreateEntryBlockAlloca(TheFunction, Type, Name);
 
@@ -777,6 +784,7 @@ Function *VarDeclAST::codegen() {
     Builder->CreateStore(V, Alloca);
   }
 
+  TakenNames.insert(Name);
   NamedValues[Name] = std::make_pair(isConst, Alloca);
   return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
