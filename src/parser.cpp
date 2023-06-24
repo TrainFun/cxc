@@ -29,12 +29,12 @@ int GetTokPrecedence() {
 }
 
 std::unique_ptr<ExprAST> LogError(const char *Str) {
-  fprintf(stderr, "Error: %s\n", Str);
+  fprintf(stderr, "line %u Error: %s\n", NR, Str);
   return nullptr;
 }
 
 std::unique_ptr<StmtAST> LogErrorS(const char *Str) {
-  fprintf(stderr, "Error: %s\n", Str);
+  LogError(Str);
   return nullptr;
 }
 

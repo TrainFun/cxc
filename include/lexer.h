@@ -53,5 +53,6 @@ enum Token {
 
 extern std::string IdentifierStr;
 extern double NumVal;
+extern unsigned NR;
 
 int gettok();
