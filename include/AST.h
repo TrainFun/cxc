@@ -254,31 +254,31 @@ public:
 
 class WhileStmtAST : public StmtAST {
   std::unique_ptr<ExprAST> Cond;
-  std::unique_ptr<StmtAST> Stmt;
+  std::unique_ptr<StmtAST> Body;
 
 public:
-  WhileStmtAST(std::unique_ptr<ExprAST> Cond, std::unique_ptr<StmtAST> Stmt)
-      : Cond(std::move(Cond)), Stmt(std::move(Stmt)) {}
+  WhileStmtAST(std::unique_ptr<ExprAST> Cond, std::unique_ptr<StmtAST> Body)
+      : Cond(std::move(Cond)), Body(std::move(Body)) {}
   Value *codegen() override;
 };
 
 class DoStmtAST : public StmtAST {
-  std::unique_ptr<StmtAST> Stmt;
+  std::unique_ptr<StmtAST> Body;
   std::unique_ptr<ExprAST> Cond;
 
 public:
-  DoStmtAST(std::unique_ptr<StmtAST> Stmt, std::unique_ptr<ExprAST> Cond)
-      : Stmt(std::move(Stmt)), Cond(std::move(Cond)) {}
+  DoStmtAST(std::unique_ptr<StmtAST> Body, std::unique_ptr<ExprAST> Cond)
+      : Body(std::move(Body)), Cond(std::move(Cond)) {}
   Value *codegen() override;
 };
 
 class UntilStmtAST : public StmtAST {
-  std::unique_ptr<StmtAST> Stmt;
+  std::unique_ptr<StmtAST> Body;
   std::unique_ptr<ExprAST> Cond;
 
 public:
-  UntilStmtAST(std::unique_ptr<StmtAST> Stmt, std::unique_ptr<ExprAST> Cond)
-      : Stmt(std::move(Stmt)), Cond(std::move(Cond)) {}
+  UntilStmtAST(std::unique_ptr<StmtAST> Body, std::unique_ptr<ExprAST> Cond)
+      : Body(std::move(Body)), Cond(std::move(Cond)) {}
   Value *codegen() override;
 };
 
