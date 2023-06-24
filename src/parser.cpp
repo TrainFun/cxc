@@ -166,7 +166,7 @@ std::unique_ptr<StmtAST> ParseSwitchStmt() {
     return LogErrorS("Expect '{' in switch");
   getNextToken();
 
-  std::vector<std::pair<std::unique_ptr<ExprAST>,
+  std::vector<std::pair<std::vector<std::unique_ptr<ExprAST>>,
                         std::vector<std::unique_ptr<StmtAST>>>>
       CaseList;
 
@@ -178,19 +178,29 @@ std::unique_ptr<StmtAST> ParseSwitchStmt() {
     return LogErrorS("Expect switch starting with 'case' or 'default'");
   }
 
+  bool hasDefault = false;
+
   do {
-    getNextToken(); // eat "case" | "default"
+    std::vector<std::unique_ptr<ExprAST>> Matches;
+    do {
+      std::unique_ptr<ExprAST> Match = nullptr;
+      if (CurTok == tok_case) {
+        getNextToken();
+        Match = ParseExpression();
+        if (!Match)
+          return nullptr;
+      } else {
+        if (hasDefault)
+          return LogErrorS("Switch has more than one 'default'");
+        hasDefault = true;
+        getNextToken();
+      }
+      if (CurTok != ':')
+        return LogErrorS("Expect ':' after 'case' or 'default'");
+      getNextToken();
 
-    std::unique_ptr<ExprAST> Match = nullptr;
-    if (CurTok == tok_case) {
-      Match = ParseExpression();
-      if (!Match)
-        return nullptr;
-    }
-
-    if (CurTok != ':')
-      return LogErrorS("Expect ':' after 'case' or 'default'");
-    getNextToken();
+      Matches.push_back(std::move(Match));
+    } while (CurTok == tok_case || CurTok == tok_default);
 
     std::vector<std::unique_ptr<StmtAST>> Stmts;
     while (CurTok != tok_case && CurTok != tok_default && CurTok != '}') {
@@ -200,7 +210,7 @@ std::unique_ptr<StmtAST> ParseSwitchStmt() {
       Stmts.push_back(std::move(Stmt));
     }
 
-    CaseList.push_back(std::make_pair(std::move(Match), std::move(Stmts)));
+    CaseList.push_back(std::make_pair(std::move(Matches), std::move(Stmts)));
   } while (CurTok == tok_case || CurTok == tok_default);
 
   getNextToken(); // eat '}'
