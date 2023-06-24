@@ -474,6 +474,7 @@ std::unique_ptr<StmtAST> ParseStatement() {
   case tok_true:
   case tok_false:
   case tok_identifier:
+  case tok_cast:
     return ParseExprStmt();
   case '{':
     return ParseBlockStmt();
@@ -502,6 +503,31 @@ std::unique_ptr<StmtAST> ParseStatement() {
   }
 }
 
+std::unique_ptr<ExprAST> ParseCastExpr() {
+  getNextToken(); // eat "cast"
+
+  if (CurTok != '<')
+    return LogError("Expected '<' in cast");
+  getNextToken();
+
+  auto Type = ParseType();
+  if (Type == typ_err)
+    return nullptr;
+
+  if (CurTok != '>')
+    return LogError("Expected '>' in cast");
+  getNextToken();
+
+  if (CurTok != '(')
+    return LogError("Expected '(' in cast");
+
+  auto From = ParseParenExpr();
+  if (!From)
+    return nullptr;
+
+  return std::make_unique<CastExprAST>(Type, std::move(From));
+}
+
 std::unique_ptr<ExprAST> ParsePrimary() {
   switch (CurTok) {
   default:
@@ -518,13 +544,15 @@ std::unique_ptr<ExprAST> ParsePrimary() {
     return ParseBooleanExpr();
   case '(':
     return ParseParenExpr();
+  case tok_cast:
+    return ParseCastExpr();
   }
 }
 
 std::unique_ptr<ExprAST> ParseUnary() {
   if (CurTok == tok_identifier || CurTok == tok_intliteral ||
       CurTok == tok_doubleliteral || CurTok == tok_true ||
-      CurTok == tok_false || CurTok == '(')
+      CurTok == tok_false || CurTok == '(' || CurTok == tok_cast)
     return ParsePrimary();
 
   int Opc = CurTok;

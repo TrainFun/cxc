@@ -7,6 +7,7 @@ enum Token {
 
   // commands
   // tok_def = -2,
+  tok_cast = -2,
 
   // primary
   tok_identifier = -3,

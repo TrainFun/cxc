@@ -316,4 +316,14 @@ public:
   Value *codegen() override;
 };
 
+class CastExprAST : public ExprAST {
+  enum CXType Type;
+  std::unique_ptr<ExprAST> From;
+
+public:
+  CastExprAST(const enum CXType Type, std::unique_ptr<ExprAST> From)
+      : Type(Type), From(std::move(From)) {}
+  Value *codegen() override;
+};
+
 // } // namespace
