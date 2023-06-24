@@ -459,6 +459,16 @@ std::unique_ptr<StmtAST> ParseBrkStmt() {
   return std::make_unique<BrkStmtAST>();
 }
 
+std::unique_ptr<StmtAST> ParseExitStmt() {
+  getNextToken();
+  auto ExitCode = ParseExpression();
+  if (!ExitCode)
+    return nullptr;
+  if (CurTok != ';')
+    return LogErrorS("Expect ';' after exit");
+  return std::make_unique<ExitStmtAST>(std::move(ExitCode));
+}
+
 std::unique_ptr<StmtAST> ParseStatement() {
   switch (CurTok) {
   default:
@@ -500,6 +510,8 @@ std::unique_ptr<StmtAST> ParseStatement() {
     return ParseBrkStmt();
   case tok_return:
     return ParseRetStmt();
+  case tok_exit:
+    return ParseExitStmt();
   }
 }
 

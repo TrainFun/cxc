@@ -326,4 +326,13 @@ public:
   Value *codegen() override;
 };
 
+class ExitStmtAST : public StmtAST {
+  std::unique_ptr<ExprAST> ExitCode;
+
+public:
+  ExitStmtAST(std::unique_ptr<ExprAST> ExitCode)
+      : ExitCode(std::move(ExitCode)) {}
+  Value *codegen() override;
+};
+
 // } // namespace

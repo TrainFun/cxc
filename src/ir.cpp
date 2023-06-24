@@ -37,6 +37,9 @@ void InitializeModule() {
   Function::Create(
       FunctionType::get(Builder->getInt32Ty(), Builder->getInt8PtrTy(), true),
       Function::ExternalLinkage, "scanf", *TheModule);
+  Function::Create(
+      FunctionType::get(Builder->getInt32Ty(), Builder->getInt32Ty(), false),
+      Function::ExternalLinkage, "exit", *TheModule);
 }
 
 Value *LogErrorV(const char *Str) {
@@ -1229,4 +1232,16 @@ Value *CastExprAST::codegen() {
   if (V)
     setCXType(Type);
   return V;
+}
+
+Value *ExitStmtAST::codegen() {
+  auto V = ExitCode->codegen();
+  if (!V)
+    return nullptr;
+
+  auto CalleeF = TheModule->getFunction("exit");
+  Value *Args[] = {V};
+  Builder->CreateCall(CalleeF, Args, "calltmp");
+
+  return Constant::getNullValue(Builder->getVoidTy());
 }
