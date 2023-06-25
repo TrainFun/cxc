@@ -835,49 +835,56 @@ std::unique_ptr<DeclAST> ParseTopLevelDeclaration() {
 //   }
 // }
 
-void HandleTopLevelDeclaration() {
+int HandleTopLevelDeclaration() {
   if (auto DeclAST = ParseTopLevelDeclaration()) {
     if (DeclAST->isVarDecl()) {
       auto D = std::unique_ptr<GlobVarDeclAST>(
           static_cast<GlobVarDeclAST *>(DeclAST.release())); // WHY?
       D->codegen();
-      return;
+      if (!D)
+        return 1;
+      return 0;
     }
 
     // Function.
     if (auto DeclIR = DeclAST->codegen()) {
-      DeclIR->print(errs());
-      fprintf(stderr, "\n");
+      // DeclIR->print(errs());
+      // fprintf(stderr, "\n");
 
       auto P = std::unique_ptr<PrototypeAST>(
           dynamic_cast<PrototypeAST *>(DeclAST.release()));
       if (P)
         NamedFns[P->getName()] = std::move(P);
+      return 0;
     }
-    return;
+    return 1;
   }
 
   // Parsing fails.
   while (true) {
     auto LastTok = CurTok;
     getNextToken();
-    if (LastTok == ';' || LastTok == '}')
+    if (LastTok == ';' || LastTok == '}' || LastTok == tok_eof)
       break;
   }
+
+  return 1;
 }
 
-void MainLoop() {
+int MainLoop() {
+  int ret = 0;
   while (true) {
     // fprintf(stderr, "ready> ");
     switch (CurTok) {
     case tok_eof:
-      return;
+      return ret;
     case ';':
       getNextToken();
       break;
     default:
-      HandleTopLevelDeclaration();
+      ret |= HandleTopLevelDeclaration();
       break;
     }
   }
+  return ret;
 }

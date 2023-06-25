@@ -28,9 +28,11 @@ int main(int argc, char **argv) {
 
   InitializeModule();
 
-  MainLoop();
+  int ret = MainLoop();
 
-  TheModule->print(outs(), nullptr);
+  if (ret == 0)
+    TheModule->print(outs(), nullptr);
 
   fclose(stdin);
+  return ret;
 }
