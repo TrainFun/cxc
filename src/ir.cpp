@@ -1138,11 +1138,15 @@ Value *WriteStmtAST::codegen() {
 }
 
 Value *ContStmtAST::codegen() {
+  if (!ContDest)
+    return LogErrorV("Cannot use 'continue' here");
   Builder->CreateBr(ContDest);
   return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
 
 Value *BrkStmtAST::codegen() {
+  if (!BrkDest)
+    return LogErrorV("Cannot use 'break' here");
   Builder->CreateBr(BrkDest);
   return (Function *)Constant::getNullValue(Type::getVoidTy(*TheContext));
 }
