@@ -7,6 +7,6 @@
 extern std::map<int, int> BinopPrecedence;
 
 int getNextToken();
-void MainLoop();
+int MainLoop();
 std::unique_ptr<ExprAST> LogError(const char *Str);
 void InitializeModule();
