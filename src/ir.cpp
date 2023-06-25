@@ -696,6 +696,9 @@ Value *UnaryExprAST::codegen() {
       Dest = G;
     }
 
+    if (NamedValues[OpVar->getName()].first)
+      return LogErrorV("Const variables cannot perform self increment");
+
     switch (OpVar->getCXType()) {
     default:
       return LogErrorV("Unreachable!");
@@ -726,7 +729,7 @@ Value *UnaryExprAST::codegen() {
     auto OpVar = std::unique_ptr<VariableExprAST>(
         dynamic_cast<VariableExprAST *>(Operand.release()));
     if (!OpVar)
-      return LogErrorV("Operand of '++' must be a variable");
+      return LogErrorV("Operand of '--' must be a variable");
 
     Value *Dest = NamedValues[OpVar->getName()].second;
     if (!Dest) {
@@ -735,6 +738,9 @@ Value *UnaryExprAST::codegen() {
         return LogErrorV("Unknown variable");
       Dest = G;
     }
+
+    if (NamedValues[OpVar->getName()].first)
+      return LogErrorV("Const variables cannot perform self increment");
 
     switch (OpVar->getCXType()) {
     default:
