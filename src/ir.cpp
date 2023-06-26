@@ -808,6 +808,8 @@ Function *VarDeclAST::codegen() {
     auto V = Val->codegen();
     if (!V)
       return nullptr;
+    if (Val->getCXType() != Type)
+      return (Function *)LogErrorV("Incompatible types.");
     Builder->CreateStore(V, Alloca);
   }
 
