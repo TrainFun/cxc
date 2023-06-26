@@ -3,3 +3,5 @@ bin
 
 *.cache
 compile_commands.json
+
+doc/doxygen
