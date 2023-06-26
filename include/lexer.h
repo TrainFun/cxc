@@ -2,6 +2,9 @@
 
 #include <string>
 
+/**
+ * Token enum used for representing non-ascii tokens.
+ */
 enum Token {
   tok_eof = -1,
 
@@ -52,8 +55,21 @@ enum Token {
   tok_const = -36,
 };
 
+/**
+ * String form of the current token.
+ */
 extern std::string IdentifierStr;
+/**
+ * Value of the current token if it is a literal.
+ */
 extern double NumVal;
+/**
+ * Current line number.
+ */
 extern unsigned NR;
 
+/**
+ * Get a new token from input stream.
+ * @return The token it gets.
+ */
 int gettok();
